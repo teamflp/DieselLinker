@@ -22,6 +22,13 @@ use syn::{parse_macro_input, ItemStruct};
 /// struct User {
 ///     // Définitions des champs de la structure `User`...
 /// }
+///
+///  // Table post
+/// #[derive(DieselLinker)]
+/// #[relation(type = "many-to-one", table1 = "users", table2 = "posts", column1 = "id", column2 = "user_id")]
+/// struct Post {
+///    // Définitions des champs de la structure `Post`...
+/// }
 /// ```
 ///
 /// # Arguments

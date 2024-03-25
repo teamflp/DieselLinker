@@ -67,4 +67,4 @@ cargo build
 Effectuez également des tests pour confirmer que les relations sont correctement gérées et que vous pouvez effectuer des opérations liées à la base de données selon vos besoins.
 
 ## Conclusion
-La macro DieselLinker vise à simplifier la définition des relations entre les tables dans les applications Diesel. Assurez-vous de tester soigneusement dans divers scénarios pour confirmer que tout fonctionne comme prévu.
+La macro DieselLinker vise à simplifier la définition des relations entre les tables dans les applications Diesel. En suivant les étapes ci-dessus, vous pouvez facilement définir et gérer les relations entre vos modèles de base de données.
