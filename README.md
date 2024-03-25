@@ -2,15 +2,19 @@
 
 Ce guide vous montre comment utiliser la macro `DieselLinker` pour faciliter la définition de relations entre les tables dans une application Rust utilisant Diesel.
 
-## Prérequis
+`DieselLinker` est une macro qui simplifie la définition des relations entre les tables dans une application Rust utilisant Diesel. Il permet de définir des relations `one-to-many` et `many-to-one` entre les tables en spécifiant les noms des tables et des colonnes impliquées.
 
+## Prérequis
+Pour utiliser la macro `DieselLinker`, vous devez avoir les éléments suivants :
+
+- Rust et Cargo installés sur votre système.
 - Assurez-vous que `Diesel` est ajouté à vos dépendances dans `Cargo.toml`.
 - La macro `DieselLinker` doit être ajoutée comme dépendance.
     
 ```toml
 [dependencies]
 diesel = { version = "1.4", features = ["postgres"] }
-diesel_linker = "0.1"
+diesel_linker = "1.1"
 ```
 
 ## Étape 1 : Définir vos Modèles
