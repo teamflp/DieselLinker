@@ -17,7 +17,7 @@ use relation_macro::diesel_linker_impl;
 /// Voici comment vous pourriez définir une relation "one-to-many" entre une table `users`
 /// et une table `posts`, où un utilisateur peut avoir plusieurs posts.
 ///
-/// ```ignore
+/// ```bash
 /// use diesel_linker::DieselLinker;
 ///
 /// #[derive(DieselLinker)]
