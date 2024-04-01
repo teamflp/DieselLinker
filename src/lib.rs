@@ -1,54 +1,84 @@
 // lib.rs
-
+extern crate proc_macro;
 mod relation_macro;
 mod utils;
 
 use proc_macro::TokenStream;
 use relation_macro::diesel_linker_impl;
 
-/// Macro `DieselLinker` pour faciliter la création de relations entre les modèles Diesel.
-///
-/// Cette macro permet de déclarer facilement des relations entre différentes tables
-/// dans une base de données en utilisant Diesel. Elle supporte différents types de relations,
-/// comme "one-to-many", "many-to-one", et "many-to-many".
-///
-/// # Exemple
-///
-/// Voici comment vous pourriez définir une relation "one-to-many" entre une table `users`
-/// et une table `posts`, où un utilisateur peut avoir plusieurs posts.
-///
-/// ```bash
-/// use diesel_linker::DieselLinker;
-///
-/// #[derive(DieselLinker)]
-/// #[relation(type = "one-to-many", table1 = "users", table2 = "posts", column1 = "id", column2 = "user_id")]
-/// struct User {
-///     // Définitions des champs de la structure `User`...
-/// }
-/// ```
-///
-/// Dans cet exemple, `#[derive(DieselLinker)]` applique la macro `DieselLinker` à la structure `User`.
-/// L'attribut `#[relation(...)]` spécifie les détails de la relation entre les tables `users` et `posts`.
-/// `type` décrit le type de relation, `table1` et `table2` sont les noms des tables impliquées,
-/// et `column1` et `column2` désignent les colonnes utilisées pour joindre les tables.
+
 #[proc_macro_derive(DieselLinker, attributes(relation))]
 pub fn diesel_linker_derive(input: TokenStream) -> TokenStream {
     diesel_linker_impl(input, TokenStream::new())
 }
 
-/// Définition de la macro d'attribut `relation` qui est utilisée pour spécifier les détails de la relation.
+
+/// Implements the `diesel_linker` macro.
 ///
-/// Cette macro d'attribut est destinée à être utilisée avec `DieselLinker` pour fournir des informations supplémentaires
-/// sur la manière dont les modèles sont reliés entre eux.
+/// This macro is used to define relationships between tables in a Diesel schema.```
 ///
-/// # Arguments
+/// # Attributes
 ///
-/// * `attr` - Les attributs passés à la macro, spécifiant le type de relation et les détails des tables et colonnes.
-/// * `item` - Le corps de la structure à laquelle la macro est appliquée.
+/// The `relation` attribute is used to define the relationship between tables.
 ///
-/// # Retourne
+/// The following attributes are supported:
 ///
-/// Un `TokenStream` contenant le code généré basé sur les attributs de relation spécifiés.
+/// - `type`: The type of relationship. The possible values are `one_to_one`, `one_to_many`, `many_to_one`, and `many_to_many`.
+/// - `table_from`: The name of the table from which the relationship originates.
+/// - `table_to`: The name of the table to which the relationship points.
+/// - `column_from`: The name of the column in the `table_from` table.
+/// - `column_to`: The name of the column in the `table_to` table.
+///
+/// # Example usage
+///
+/// ```rust
+/// // #[macro_use]
+/// // extern crate diesel;
+///
+/// // Import the schema module, which contains the tables. You can import it as mod schema;
+/// // if you have a schema.rs file in your project.
+/// // mod schema;
+/// // use crate::schema::*; // Import the schema module.
+/// // use chrono::NaiveDateTime;
+/// // use diesel::prelude::*;
+/// // use diesel_linker::{relation, DieselLinker};
+/// // use std::env; // Import the `env` module from the standard library if you want to use environment variables.
+/// // use diesel_linker::DieselLinker; // Import the `DieselLinker` trait.
+/// // use diesel::{Queryable, Identifiable, Associations}; // Import the necessary Diesel traits.
+///
+/// // User Struct
+///
+/// // #[derive(DieselLinker)]
+/// // #[derive(Queryable, Identifiable, Associations)]
+/// // #[diesel(belongs_to(User), table_name = "posts")]
+///
+/// struct User {
+///     // Definition of fields in the User struct...
+/// }
+///
+/// // Post Struct
+///
+/// // #[derive(DieselLinker)]
+/// // #[derive(Queryable, Identifiable, Associations)] // Definition of Diesel derivations
+/// // #[diesel(table_name = "posts")] // Table name
+///
+/// struct Post {
+///    // Definition of fields in the Post struct...
+/// }
+///
+/// // Relation Definition
+///
+/// // #[derive(DieselLinker)]
+/// // #[derive(Queryable, Identifiable)]
+/// // #[relation(type = "one_to_many", table_from = "users", table_to = "posts", column_from = "id", column_to = "user_id")]
+/// struct UserPostRelation; // Struct to manage the many-to-many relation between `users` and `posts`
+/// ```
+///
+/// # Notes
+///
+/// The `relation` attribute is used to define the relationship between tables in a Diesel schema.
+///
+
 #[proc_macro_attribute]
 pub fn relation(attr: TokenStream, item: TokenStream) -> TokenStream {
     diesel_linker_impl(attr, item)
