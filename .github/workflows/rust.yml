@@ -6,13 +6,6 @@ on:
   pull_request:
     branches: [ "development" ]
 
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version of the project to build'
-        required: true
-        default: '1.2.0'
-
 permissions:
   contents: read
   id-token: write
@@ -31,12 +24,12 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Rust
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
-          node-version: '20.12.1'
+          node-version: '20'
           cache: 'npm'
 
       - name: Build Docker Image
@@ -62,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Build
         run: cargo build --verbose
       - name: Run tests
