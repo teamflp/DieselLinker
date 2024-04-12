@@ -26,7 +26,13 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.2.0
+
+      - name: Set up Rust
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20.12.1'
+          cache: 'npm'
 
       - name: Build Docker Image
         run: |
@@ -51,9 +57,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v3
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
 
