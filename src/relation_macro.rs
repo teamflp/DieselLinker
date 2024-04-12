@@ -6,32 +6,6 @@ use quote::quote;
 use syn::ItemStruct;
 use syn::{self, parse_macro_input, AttributeArgs, Ident};
 
-/// Generates the implementation of the `diesel_linker` macro.
-///
-/// # Arguments
-///
-/// * `input` - The input token stream of the macro.
-/// * `output` - The output token stream of the macro.
-///
-/// # Returns
-///
-/// A `TokenStream` of the generated implementation.
-///
-/// # Example usage:
-///
-/// ```rust
-// /// #[relation(child = "Post", fk = "user_id", relation_type = "one_to_many")]
-/// struct User {
-///    pub id: i32,
-///    pub name: String,
-/// }
-/// ```
-///
-/// # Panics
-///
-/// If the relation attributes are missing, the function will panic.
-///
-
 #[derive(Debug)]
 pub struct RelationAttributes {
     pub child_model: String,

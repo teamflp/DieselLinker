@@ -32,7 +32,6 @@ Or, add `DieselLinker` and `diesel` to your `Cargo.toml` file :
 [dependencies]
 diesel = { version = "2.1.5", features = ["postgres"] }
 diesel_linker = "version_number"
-
 ```
 DieselLinker is compatible with Diesel version 2.1.5 and automatically detects the type of database you are using.
 
