@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4.2.0
+        uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: actions/setup-node@v2
@@ -57,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose
       - name: Run tests
