@@ -5,6 +5,7 @@ on:
     branches: [ "development" ]
   pull_request:
     branches: [ "development" ]
+
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+
   build-and-test:
     runs-on: ubuntu-latest
 
@@ -43,3 +45,15 @@ jobs:
       - name: Run Tests in Docker Container
         run: |
           docker exec diesel_linker cargo test --verbose
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
+
