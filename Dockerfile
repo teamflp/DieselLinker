@@ -1,9 +1,9 @@
-# Utiliser l'image officielle d'Ubuntu comme image de base
+# Utiliser l'image officielle d'Ubuntu comme base
 FROM ubuntu:latest
 
-# Installer les dépendances nécessaires pour Apache et Rust
+# Mettre à jour et installer les dépendances nécessaires
 RUN apt-get update && \
-    apt-get install -y apache2 curl build-essential && \
+    apt-get install -y curl build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -13,11 +13,11 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 # Ajouter cargo et rustc au PATH
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Copier les fichiers du site dans le répertoire public d'Apache
-COPY . /var/www/html
+# Copier les fichiers du projet Rust dans le conteneur
+COPY . /usr/src/diesel_linker
 
-# Exposer le port 80
-EXPOSE 80
+# Changer le répertoire de travail pour le projet Rust
+WORKDIR /usr/src/diesel_linker
 
-# Lancer Apache en arrière-plan
-CMD ["apachectl", "-D", "FOREGROUND"]
+# Commande par défaut pour construire le projet Rust lorsque le conteneur démarre
+CMD ["cargo", "run", "--verbose"]
