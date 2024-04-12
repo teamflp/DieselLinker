@@ -1,72 +1,103 @@
-# Guide d'utilisation de la Macro `DieselLinker`
+# Relationships with DieselLinker
 
-Ce guide vous montre comment utiliser la macro `DieselLinker` pour faciliter la définition de relations entre les tables dans une application Rust utilisant Diesel.
+`DieselLinker`  is a macro that simplifies the definition of one-to-one relationships between tables in a Rust application using Diesel. DieselLinker allows you to define one-to-one relationships between tables in your database.
 
-`DieselLinker` est une macro qui simplifier la définition des relations entre les tables dans une application Rust- utilisant Diesel. Il permet de définir des relations `one-to-many` et `many-to-one` entre les tableaux en fédérateur les noms des tableaux et des colonnes.
+## Installation of DieselLinker in your Rust project
 
-## Prérequis
+Visit [crates.io](https://crates.io/crates/diesel_linker) to get the latest version of DieselLinker.
 
-- Assurez-vous que `Diesel` est ajouté à vos dépendances dans `Cargo.toml`.
-- La macro `DieselLinker` doit être ajoutée comme dépendance.
-    
+To install DieselLinker in your project, you can use Cargo, the Rust package manager.
+**Using Cargo** : 
+- Install `DieselLinker` with the following command:
+
+```bash
+cargo install diesel_linker
+```
+Or, add `DieselLinker` and `diesel` to your `Cargo.toml` file :
 ```toml
 [dependencies]
-diesel = { version = "1.4", features = ["postgres"] }
-diesel_linker = "1.1"
+diesel = { version = "2.1.5", features = ["postgres"] }
+diesel_linker = "version_number"
 ```
+DieselLinker is compatible with Diesel version 2.1.5 and automatically detects the type of database you are using.
 
-## Étape 1 : Définir vos Modèles
-
-Commencez par définir vos modèles Rust qui correspondent à vos tables dans la base de données.
+## Using DieselLinker to define relationships
+### Step 1: Define the models that correspond to the tables in your database
 
 ```rust
-#[derive(Queryable)]
-struct User {
+use diesel_linker::relation;
+
+#[derive(DieselLinker)]
+#[derive(Queryable, Identifiable, Debug)]
+#[table_name = "users"]
+#[relation(child = "Post", fk = "user_id", relation_type = "one_to_many")]
+pub struct User {
     pub id: i32,
     pub name: String,
-    // autres champs...
+    pub email: String,
 }
 
-#[derive(Queryable)]
-struct Post {
+#[derive(DieselLinker)]
+#[derive(Queryable, Identifiable, Debug, Associations)]
+#[diesel(belongs_to = "User"), table_name = "posts"]
+#[relation(child = "Post", fk = "user_id", relation_type = "many_to_one")]
+pub struct Post {
     pub id: i32,
-    pub user_id: i32, // Clé étrangère vers la table User
+    pub user_id: i32,
     pub title: String,
-    // autres champs...
+    pub body: String,
 }
 ```
+In this example, we define two models `User` and `Post` with a one-to-many relationship between them.
 
-## Étape 2 : Utiliser la Macro DieselLinker
-Appliquez la macro `DieselLinker` à votre modèle pour définir la relation entre les tables.
+## Methods generated for the `one-to-many` relationship :
+- `DieselLinker`  automatically generates the necessary Diesel relationship methods to handle the relationships between tables.
+- For exemple, for `one-to-many` relationship between the tables `User` and `Post`, the following methods are generated:
+```rust
+// The `posts` method is generated for the `User` model
+impl User {
+    pub fn posts(&self, connection: &PgConnection) -> QueryResult<Vec<Post>> {
+        Post::belonging_to(self).load(connection)
+    }
+}
 
-### Pour une Relation `One-to-Many`
-Si un utilisateur peut avoir plusieurs posts, vous pouvez définir cette relation comme suit :
+// The `user` method is generated for the `Post` model
+impl Post {
+    pub fn user(&self, connection: &PgConnection) -> QueryResult<User> {
+        User::belonging_to(self).get_result(connection)
+    }
+}
+```
+Now, you can easily access a user's posts or a post's user using these methods.
+
+### Step 2: Utilize the Generated Methods
+After defining the models and relationships, you can use the generated methods to access the related data in your application.
 
 ```rust
-use diesel_linker::DieselLinker;
+fn main() {
+    use diesel::prelude::*;
+    use diesel::pg::PgConnection;
+    use diesel_linker::schema::users::dsl::*;
+    use diesel_linker::schema::posts::dsl::*;
 
-#[derive(DieselLinker)]
-#[relation(type = "one-to-many", table1 = "users", table2 = "posts", column1 = "id", column2 = "user_id")]
-struct User {
-    // Définitions de champs...
-}
+    let connection = PgConnection::establish("postgres://user:password@localhost/mydb").unwrap();
 
-#[derive(DieselLinker)]
-#[relation(type = "many-to-one", table1 = "users", table2 = "posts", column1 = "id", column2 = "user_id")]
-struct Post {
-    // Définitions de champs...
+    let user = users.find(1).first::<User>(&connection).expect("Error loading user");
+    let user_posts = user.posts(&connection).expect("Error loading user posts");
+
+    for post in user_posts {
+        println!("Title: {}", post.title);
+        println!("Body: {}", post.body);
+    }
 }
 ```
+In this example, we load a user from the database and display the `titles` and `posts` associated with that `user`.
 
-Cette syntaxe indique que la table `users` a une relation "`one-to-many`" avec la table `posts`, où `column1 (id dans users)` est la clé primaire et c`olumn2 (user_id dans posts)` est la clé étrangère.
-
-## Étape 3 : Compiler et Tester
-Après avoir appliqué la macro à vos structures, compilez votre projet pour vous assurer que la macro fonctionne comme attendu.
-
+After applying the macro to your structures, compile your project to ensure that the macro works as expected.
 ```bash
 cargo build
 ```
-Effectuez également des tests pour confirmer que les relations sont correctement gérées et que vous pouvez effectuer des opérations liées à la base de données selon vos besoins.
+Finally, perform tests to confirm that the relationships are correctly managed and that you can perform database operations as needed.
 
 ## Conclusion
-La macro DieselLinker vise à simplifier la définition des relations entre les tables dans les applications Diesel. En suivant les étapes ci-dessus, vous pouvez facilement définir et gérer les relations entre vos modèles de base de données.
+The DieselLinker macro simplifies the definition of one-to-one relationships between tables in a Rust application using Diesel. By following the steps outlined in this guide, you can easily define and manage one-to-one relationships between your models and their corresponding tables in the database.
