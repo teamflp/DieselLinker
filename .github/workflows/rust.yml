@@ -1,0 +1,45 @@
+name: DieselLinker CI/CD
+
+on:
+  push:
+    branches: [ "development" ]
+  pull_request:
+    branches: [ "development" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: "diesel_linker-build-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        run: |
+          docker build -t diesel_linker:latest .
+
+      - name: Stop and Remove existing Docker container
+        run: |
+          docker stop diesel_linker || true
+          docker rm diesel_linker || true
+
+      - name: Run Docker Container and Build Project
+        run: |
+          docker run -d --name diesel_linker diesel_linker:latest
+          docker exec diesel_linker cargo build --verbose
+
+      - name: Run Tests in Docker Container
+        run: |
+          docker exec diesel_linker cargo test --verbose

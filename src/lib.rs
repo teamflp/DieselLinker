@@ -1,54 +1,103 @@
 // lib.rs
-
+extern crate proc_macro;
 mod relation_macro;
 mod utils;
 
 use proc_macro::TokenStream;
 use relation_macro::diesel_linker_impl;
 
-/// Macro `DieselLinker` pour faciliter la création de relations entre les modèles Diesel.
-///
-/// Cette macro permet de déclarer facilement des relations entre différentes tables
-/// dans une base de données en utilisant Diesel. Elle supporte différents types de relations,
-/// comme "one-to-many", "many-to-one", et "many-to-many".
-///
-/// # Exemple
-///
-/// Voici comment vous pourriez définir une relation "one-to-many" entre une table `users`
-/// et une table `posts`, où un utilisateur peut avoir plusieurs posts.
-///
-/// ```ignore
-/// use diesel_linker::DieselLinker;
-///
-/// #[derive(DieselLinker)]
-/// #[relation(type = "one-to-many", table1 = "users", table2 = "posts", column1 = "id", column2 = "user_id")]
-/// struct User {
-///     // Définitions des champs de la structure `User`...
-/// }
-/// ```
-///
-/// Dans cet exemple, `#[derive(DieselLinker)]` applique la macro `DieselLinker` à la structure `User`.
-/// L'attribut `#[relation(...)]` spécifie les détails de la relation entre les tables `users` et `posts`.
-/// `type` décrit le type de relation, `table1` et `table2` sont les noms des tables impliquées,
-/// et `column1` et `column2` désignent les colonnes utilisées pour joindre les tables.
 #[proc_macro_derive(DieselLinker, attributes(relation))]
 pub fn diesel_linker_derive(input: TokenStream) -> TokenStream {
     diesel_linker_impl(input, TokenStream::new())
 }
 
-/// Définition de la macro d'attribut `relation` qui est utilisée pour spécifier les détails de la relation.
+/// Implements the `diesel_linker` macro.
 ///
-/// Cette macro d'attribut est destinée à être utilisée avec `DieselLinker` pour fournir des informations supplémentaires
-/// sur la manière dont les modèles sont reliés entre eux.
+/// The diesel_linker macro simplifies defining and managing relationships between database tables in Rust applications using Diesel ORM. It automates generating ORM layer code necessary for handling relationships such as one_to_one,one-to-many, many-to-one, and many-to-many.
 ///
-/// # Arguments
+/// # Attributes
 ///
-/// * `attr` - Les attributs passés à la macro, spécifiant le type de relation et les détails des tables et colonnes.
-/// * `item` - Le corps de la structure à laquelle la macro est appliquée.
+/// The `relation` attribute is used to define the relationship between tables.
 ///
-/// # Retourne
+/// The following attributes are supported:
 ///
-/// Un `TokenStream` contenant le code généré basé sur les attributs de relation spécifiés.
+/// `attrs`: The attributes provided to the macro, which describe the relationship:
+/// - `child`: The name of the table from which the relationship originates.
+/// - `fk`: Indicates the foreign key in the parent table linking to the child.
+/// - `join_table`: The name of the join table for many-to-many relationships.
+/// - `fk_parent`: The foreign key in the join table linking to the parent table.
+/// - `relation_type`: The type of relationship (one_to_one, one_to_many, many_to_one, many_to_many).
+///
+/// Returns :
+///
+/// `Result<(String, String, String), String>`: On successful execution, returns a tuple containing:
+/// - Child model name.
+/// - Foreign key used in the parent table.
+/// - Relation type (one_to_one, one_to_many, many_to_one, many_to_many).
+///
+/// On failure, it returns an error message explaining the execution failure.
+///
+/// # Example usage
+///
+// ```rust
+// Apply the `diesel_linker` macro to the User struct to define a one-to-many relationship with Post.
+/// use diesel_linker::relation;
+///
+/// #[derive(DieselLinker)]
+/// #[derive(Queryable, Identifiable, Debug)]
+/// #[table_name = "users"]
+/// #[relation(child = "Post", fk = "user_id", relation_type = "one_to_many")]
+/// pub struct User {
+///     pub id: i32,
+///     pub name: String,
+///     pub email: String,
+/// }
+///
+/// Apply the `diesel_linker` macro to the Post struct to define a many-to-one relationship with User.
+///
+/// #[derive(DieselLinker)]
+/// #[derive(Queryable, Identifiable, Debug, Associations)]
+/// #[diesel(belongs_to = "User"), table_name = "posts"]
+/// #[relation(child = "Post", fk = "user_id", relation_type = "many_to_one")]
+/// pub struct Post {
+///     pub id: i32,
+///     pub user_id: i32,
+///     pub title: String,
+///     pub body: String,
+/// }
+// ```
+///
+// # Generated methods for the relation
+///
+/// Based on the specified relation_type, the macro generates appropriate Rust methods to manage the relationships:
+///
+/// Example for a one_to_many relationship:
+///
+/// For the struct User related to Post through a one_to_many relationship:
+///
+/// Retrieves all posts related to this user instance from the database.
+///
+// ```rust
+///// impl User {
+/////    pub fn posts(&self, conn: &PgConnection) -> diesel::QueryResult<Vec<Post>> {
+/////         use crate::schema::posts::dsl::*;
+/////         posts.filter(user_id.eq(self.id)).load::<Post>(conn)
+/////     }
+///// }
+// ```
+///
+/// # Usage in your code:
+///
+// How to use the generated methods in a Rust application:
+// ```rust
+/// Fetches all posts for a specific user from the database.
+///// fn get_user_posts(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<Post>> {
+/////    let user = users::table.find(user_id).first::<User>(conn)?;
+/////    user.posts(conn)
+// }
+// ```
+///
+
 #[proc_macro_attribute]
 pub fn relation(attr: TokenStream, item: TokenStream) -> TokenStream {
     diesel_linker_impl(attr, item)

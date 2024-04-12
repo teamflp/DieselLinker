@@ -1,112 +1,187 @@
 // Path: src/utils/parser.rs
 
 use proc_macro2::Span;
-use syn::{AttributeArgs, Error, Lit, MetaNameValue, NestedMeta, Result};
+use syn::{AttributeArgs, Error, Lit, Meta, NestedMeta, Result};
 
-/// Structure définissant les attributs parsés.
-///
-/// Cette structure contient tous les attributs nécessaires
-/// pour une relation spécifique définie par la macro `DieselLinker`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ParsedAttrs {
-    /// Le nom du champ extra de la relation.
-    /// Ceci est utilisé pour générer dynamiquement des champs supplémentaires
-    /// ou des fonctions basées sur les attributs passés à la macro.
-    pub extra_field_name: String,
+    pub relation_type: Option<String>,
+    pub child: Option<String>,
+    pub fk: Option<String>,         // Used for one_to_many et one_to_one
+    pub join_table: Option<String>, // Used for many_to_many
+    pub fk_parent: Option<String>,  // Foreign key for the parent in the join table for many_to_many
+    pub fk_child: Option<String>,   // Foreign key for the child in the join table for many_to_many
 }
 
-/// Parse les attributs donnés à la macro et extrait les informations nécessaires.
-///
-/// Cette fonction analyse les `AttributeArgs` fournis à une macro d'attribut
-/// et tente d'extraire et de valider les informations nécessaires comme le nom du champ extra.
-///
-/// # Arguments
-///
-/// * `attrs` - Les attributs passés à la macro, représentés comme `AttributeArgs`.
-///
-/// # Retourne
-///
-/// Cette fonction retourne un `Result` contenant soit `ParsedAttrs`
-/// avec les informations extraites en cas de succès, soit une erreur `syn::Error`
-/// si les attributs ne sont pas conformes aux attentes.
+// Parses the attributes passed to the `relation` attribute macro.
 pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
-    let extra_field_name = attrs
-        .iter()
-        .find_map(|attr| {
-            if let NestedMeta::Meta(syn::Meta::NameValue(MetaNameValue { path, lit: Lit::Str(lit_str), .. })) = attr {
-                if path.is_ident("extra_field_name") {
-                    return Some(lit_str.value());
+    let mut parsed_attrs = ParsedAttrs::default();
+
+    for attr in attrs {
+        match attr {
+            NestedMeta::Meta(Meta::NameValue(nv)) => {
+                let ident = nv
+                    .path
+                    .get_ident()
+                    .ok_or_else(|| Error::new(Span::call_site(), "Expected named value"))?
+                    .to_string();
+                match ident.as_str() {
+                    "relation_type" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.relation_type = Some(s.value())
+                        }
+                    }
+                    "child" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.child = Some(s.value())
+                        }
+                    }
+                    "fk" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.fk = Some(s.value())
+                        }
+                    }
+                    "join_table" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.join_table = Some(s.value())
+                        }
+                    }
+                    "fk_parent" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.fk_parent = Some(s.value())
+                        }
+                    }
+                    "fk_child" => {
+                        if let Lit::Str(s) = &nv.lit {
+                            parsed_attrs.fk_child = Some(s.value())
+                        }
+                    }
+                    _ => {
+                        return Err(Error::new(
+                            Span::call_site(),
+                            &format!("Unknown attribute '{}'", ident),
+                        ))
+                    }
                 }
             }
-            None
-        })
-        .ok_or_else(|| {
-            // Utilise `Span::call_site()` pour générer une erreur sans dépendre d'un élément spécifique.
-            Error::new(Span::call_site(), "Attribut 'extra_field_name' attendu")
-        })?;
+            _ => return Err(Error::new(Span::call_site(), "Unexpected attribute format")),
+        }
+    }
 
-    Ok(ParsedAttrs { extra_field_name })
+    if parsed_attrs.relation_type.is_none() {
+        return Err(Error::new(
+            Span::call_site(),
+            "Attribute 'relation_type' is required",
+        ));
+    }
+
+    match parsed_attrs.relation_type.as_deref() {
+        Some("one_to_many") | Some("one_to_one") => {
+            if parsed_attrs.child.is_none() || parsed_attrs.fk.is_none() {
+                return Err(Error::new(Span::call_site(), "Attributes 'child' and 'fk' are required for 'one_to_many' and 'one_to_one' relations"));
+            }
+        }
+        Some("many_to_one") => {
+            if parsed_attrs.child.is_none() {
+                return Err(Error::new(
+                    Span::call_site(),
+                    "Attribute 'child' is required for 'many_to_one' relations",
+                ));
+            }
+        }
+        Some("many_to_many") => {
+            if parsed_attrs.join_table.is_none()
+                || parsed_attrs.fk_parent.is_none()
+                || parsed_attrs.fk_child.is_none()
+            {
+                return Err(Error::new(Span::call_site(), "Attributes 'join_table', 'fk_parent', and 'fk_child' are required for 'many_to_many' relations"));
+            }
+        }
+        _ => {
+            return Err(Error::new(
+                Span::call_site(),
+                "Unsupported relation type specified",
+            ))
+        }
+    }
+
+    Ok(parsed_attrs)
 }
 
+// The test module is only compiled when running tests.
+// The `#[cfg(test)]` attribute is used to conditionally compile the module only when running tests.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::{parse_quote, Meta};
-
-    /// Tests pour vérifier le parsing des attributs de la macro.
-    #[test]
-    fn test_parse_attributes_valid() {
-        let attrs = vec![NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-            path: parse_quote! { extra_field_name },
-            eq_token: Default::default(),
-            lit: syn::Lit::Str(syn::LitStr::new("valid_field", proc_macro2::Span::call_site())),
-        }))];
-
-        let result = parse_attributes(attrs);
-        assert!(result.is_ok(), "Devrait réussir avec un attribut valide.");
-        assert_eq!(result.unwrap().extra_field_name, "valid_field");
-    }
+    use syn::{parse_quote, NestedMeta};
 
     #[test]
-    fn test_parse_attributes_invalid() {
-        let attrs = vec![NestedMeta::Meta(parse_quote! { some_attribute })];
-
-        let result = parse_attributes(attrs);
-        assert!(result.is_err(), "Devrait échouer avec un attribut invalide.");
-        assert_eq!(result.unwrap_err().to_string(), "Attribut 'extra_field_name' attendu");
-    }
-
-    #[test]
-    fn test_no_attributes() {
-        let attrs = vec![];
-
-        let result = parse_attributes(attrs);
-        assert!(result.is_err(), "Devrait échouer sans attributs.");
-    }
-
-    #[test]
-    fn test_multiple_attributes_including_valid() {
+    fn test_one_to_one_relation_attributes() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { unrelated_attribute = "some_value" }),
-            NestedMeta::Meta(Meta::NameValue(MetaNameValue {
-                path: parse_quote! { extra_field_name },
-                eq_token: Default::default(),
-                lit: syn::Lit::Str(syn::LitStr::new("valid_field", proc_macro2::Span::call_site())),
-            })),
+            NestedMeta::Meta(parse_quote! { relation_type = "one_to_one" }),
+            NestedMeta::Meta(parse_quote! { child = "users" }),
+            NestedMeta::Meta(parse_quote! { fk = "user_id" }),
         ];
 
         let result = parse_attributes(attrs);
-        assert!(result.is_ok(), "Devrait réussir avec plusieurs attributs, y compris un attribut valide.");
-        assert_eq!(result.unwrap().extra_field_name, "valid_field");
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.relation_type.unwrap(), "one_to_one");
+        assert_eq!(parsed.child.unwrap(), "users");
+        assert_eq!(parsed.fk.unwrap(), "user_id");
     }
 
     #[test]
-    fn test_malformed_attributes() {
+    fn test_one_to_many_relation_attributes() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { extra_field_name = 123 }), // Mauvais type de valeur
+            NestedMeta::Meta(parse_quote! { relation_type = "one_to_many" }),
+            NestedMeta::Meta(parse_quote! { child = "posts" }),
+            NestedMeta::Meta(parse_quote! { fk = "user_id" }),
         ];
 
         let result = parse_attributes(attrs);
-        assert!(result.is_err(), "Devrait échouer avec des attributs mal formés.");
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.relation_type.unwrap(), "one_to_many");
+        assert_eq!(parsed.child.unwrap(), "posts");
+        assert_eq!(parsed.fk.unwrap(), "user_id");
+    }
+
+    #[test]
+    fn test_many_to_one_relation_attributes() {
+        let attrs = vec![
+            NestedMeta::Meta(parse_quote! { relation_type = "many_to_one" }),
+            NestedMeta::Meta(parse_quote! { child = "users" }),
+            NestedMeta::Meta(parse_quote! { fk = "post_id" }),
+        ];
+
+        let result = parse_attributes(attrs);
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.relation_type.unwrap(), "many_to_one");
+        assert_eq!(parsed.child.unwrap(), "users");
+        assert_eq!(parsed.fk.unwrap(), "post_id");
+    }
+
+    #[test]
+    fn test_many_to_many_relation_attributes() {
+        let attrs = vec![
+            NestedMeta::Meta(parse_quote! { relation_type = "many_to_many" }),
+            NestedMeta::Meta(parse_quote! { child = "users" }),
+            NestedMeta::Meta(parse_quote! { fk = "post_id" }),
+            NestedMeta::Meta(parse_quote! { join_table = "user_posts" }),
+            NestedMeta::Meta(parse_quote! { fk_parent = "user_id" }),
+            NestedMeta::Meta(parse_quote! { fk_child = "post_id" }),
+        ];
+
+        let result = parse_attributes(attrs);
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.relation_type.unwrap(), "many_to_many");
+        assert_eq!(parsed.child.unwrap(), "users");
+        assert_eq!(parsed.fk.unwrap(), "post_id");
+        assert_eq!(parsed.join_table.unwrap(), "user_posts");
+        assert_eq!(parsed.fk_parent.unwrap(), "user_id");
+        assert_eq!(parsed.fk_child.unwrap(), "post_id");
     }
 }
