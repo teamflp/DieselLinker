@@ -42,11 +42,12 @@ jobs:
       - name: Run Docker Container and Build Project
         run: |
           docker run -d --name diesel_linker diesel_linker:latest
+          echo "Container started, running cargo build..."
           docker exec diesel_linker cargo build --verbose
 
       - name: Run Tests in Docker Container
         run: |
-          docker exec diesel_linker cargo test --verbose
+          docker exec diesel_linker cargo test --verbose -- --test-threads=1
 
   build:
     runs-on: ubuntu-latest

@@ -1,0 +1,9 @@
+node_modules/
+**/*.log
+tmp/
+.git/
+.gitignore
+Dockerfile
+README.md
+LICENSE
+*.md
