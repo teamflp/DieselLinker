@@ -15,7 +15,7 @@ To use the DieselLinker macro, you need to have the following:
 [dependencies]
 diesel = { version = "1.4", features = ["postgres"] }
 diesel_linker = "1.1"
-
+```
 ## Installation of DieselLinker in your Rust project
 
 Visit [crates.io](https://crates.io/crates/diesel_linker) to get the latest version of DieselLinker.
