@@ -58,6 +58,7 @@ jobs:
         run: |
           docker run -d --name diesel_linker --memory 4g diesel_linker:latest
           echo "Container started, running cargo build..."
+          docker stats diesel_linker --no-stream
           docker exec diesel_linker cargo build --verbose
 
       - name: Run Tests in Docker Container
