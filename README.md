@@ -1,18 +1,15 @@
 # Relationships with DieselLinker
 
-`DieselLinker`  is a macro that simplifies the definition of one-to-one relationships between tables in a Rust application using Diesel. DieselLinker allows you to define one-to-one relationships between tables in your database.
+`DieselLinker` is a macro that simplifies the definition of relationships between tables in a Rust application using Diesel. 
+It allows you to define `one-to-many`, `many-to-one`, `one_to_one` and `many_to_many` relationships between tables by specifying the names of the tables and columns involved.
 
-`DieselLinker` est une macro qui simplifie la définition des relations entre les tables dans une application Rust utilisant Diesel. Il permet de définir des relations `one-to-many` et `many-to-one` entre les tables en spécifiant les noms des tables et des colonnes impliquées.
+## Prerequisites
+To use the DieselLinker macro, you need to have the following:
 
-`DieselLinker` est une macro qui simplifier la définition des relations entre les tables dans une application Rust- utilisant Diesel. Il permet de définir des relations `one-to-many` et `many-to-one` entre les tableaux en fédérateur les noms des tableaux et des colonnes.
-`DieselLinker` est une macro qui simplifie la définition des relations entre les tables dans une application Rust utilisant Diesel. Il permet de définir des relations `one-to-many` et `many-to-one` entre les tables en spécifiant les noms des tables et des colonnes impliquées.
 
-## Prérequis
-Pour utiliser la macro `DieselLinker`, vous devez avoir les éléments suivants :
-
-- Rust et Cargo installés sur votre système.
-- Assurez-vous que `Diesel` est ajouté à vos dépendances dans `Cargo.toml`.
-- La macro `DieselLinker` doit être ajoutée comme dépendance.
+- Rust and Cargo installed on your system.
+- Ensure that  `Diesel` is added to your dependencies in `Cargo.toml`.
+- The `DieselLinker`  macro must be added as a dependency.
     
 ```toml
 [dependencies]
