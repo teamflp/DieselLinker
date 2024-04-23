@@ -56,7 +56,7 @@ jobs:
 
       - name: Run Docker Container and Build Project
         run: |
-          docker run -d --name diesel_linker diesel_linker:latest
+          docker run -d --name diesel_linker --memory 4g diesel_linker:latest
           echo "Container started, running cargo build..."
           docker exec diesel_linker cargo build --verbose
 
