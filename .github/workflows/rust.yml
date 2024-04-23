@@ -31,6 +31,17 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Build Docker Image
         run: docker build -t diesel_linker:latest .
 
@@ -60,6 +71,18 @@ jobs:
         with:
           toolchain: stable
           override: true
+
+      # On met en cache les dépendances de Cargo pour accélérer le build
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Build
         run: cargo build --verbose
