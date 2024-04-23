@@ -47,8 +47,12 @@ jobs:
 
       - name: Stop and Remove existing Docker container
         run: |
-          docker ps -a | grep -q diesel_linker && docker stop diesel_linker
-          docker ps -a | grep -q diesel_linker && docker rm diesel_linker
+          if docker ps -a | grep -q diesel_linker; then
+            docker stop diesel_linker
+            docker rm diesel_linker
+          else
+            echo "No container to remove."
+          fi
 
       - name: Run Docker Container and Build Project
         run: |
