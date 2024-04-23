@@ -19,5 +19,5 @@ COPY . /usr/src/diesel_linker
 # Changer le répertoire de travail pour le projet Rust
 WORKDIR /usr/src/diesel_linker
 
-# Commande par défaut pour construire le projet Rust lorsque le conteneur démarre
-CMD ["cargo", "run", "--verbose"]
+# Commande par défaut pour garder le conteneur actif
+CMD ["sleep", "infinity"]

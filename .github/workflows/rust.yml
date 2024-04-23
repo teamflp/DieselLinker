@@ -54,17 +54,16 @@ jobs:
             echo "No container to remove."
           fi
 
-      - name: Run Docker Container and Build Project
+      - name: Run Docker Container
         run: |
           docker run -d --name diesel_linker --memory 4g diesel_linker:latest
           sleep 5  # Attendre quelques secondes pour que le conteneur démarre
-          docker logs diesel_linker
-          docker stats diesel_linker --no-stream
-          docker exec diesel_linker cargo build --verbose
+
+      - name: Build Library in Docker Container
+        run: docker exec diesel_linker cargo build --verbose
 
       - name: Run Tests in Docker Container
-        run: |
-          docker exec diesel_linker cargo test --verbose -- --test-threads=1
+        run: docker exec diesel_linker cargo test --verbose -- --test-threads=1
 
   build:
     runs-on: ubuntu-latest
