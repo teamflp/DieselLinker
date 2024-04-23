@@ -57,7 +57,8 @@ jobs:
       - name: Run Docker Container and Build Project
         run: |
           docker run -d --name diesel_linker --memory 4g diesel_linker:latest
-          echo "Container started, running cargo build..."
+          sleep 5  # Attendre quelques secondes pour que le conteneur démarre
+          docker logs diesel_linker
           docker stats diesel_linker --no-stream
           docker exec diesel_linker cargo build --verbose
 
