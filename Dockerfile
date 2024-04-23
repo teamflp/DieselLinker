@@ -1,5 +1,4 @@
-# Utiliser l'image officielle d'Ubuntu comme base
-FROM ubuntu:latest
+FROM ubuntu:23.10
 
 # Mettre à jour et installer les dépendances nécessaires
 RUN apt-get update && \
