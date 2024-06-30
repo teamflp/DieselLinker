@@ -77,25 +77,25 @@ pub fn diesel_linker_derive(input: TokenStream) -> TokenStream {
 ///
 /// Retrieves all posts related to this user instance from the database.
 ///
-// ```rust
-///// impl User {
-/////    pub fn posts(&self, conn: &PgConnection) -> diesel::QueryResult<Vec<Post>> {
-/////         use crate::schema::posts::dsl::*;
-/////         posts.filter(user_id.eq(self.id)).load::<Post>(conn)
-/////     }
-///// }
-// ```
+/// ```rust
+//// impl User {
+///    pub fn posts(&self, conn: &PgConnection) -> diesel::QueryResult<Vec<Post>> {
+///         use crate::schema::posts::dsl::*;
+///         posts.filter(user_id.eq(self.id)).load::<Post>(conn)
+///     }
+/// }
+/// ```
 ///
 /// # Usage in your code:
 ///
 // How to use the generated methods in a Rust application:
-// ```rust
-/// Fetches all posts for a specific user from the database.
-///// fn get_user_posts(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<Post>> {
-/////    let user = users::table.find(user_id).first::<User>(conn)?;
-/////    user.posts(conn)
+/// ```rust
+//// Fetches all posts for a specific user from the database.
+/// fn get_user_posts(conn: &PgConnection, user_id: i32) -> QueryResult<Vec<Post>> {
+///    let user = users::table.find(user_id).first::<User>(conn)?;
+///    user.posts(conn)
 // }
-// ```
+/// ```
 ///
 
 #[proc_macro_attribute]
