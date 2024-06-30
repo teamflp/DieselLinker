@@ -115,3 +115,4 @@ Finally, perform tests to confirm that the relationships are correctly managed a
 
 ## Conclusion
 The DieselLinker macro simplifies the definition of one-to-one relationships between tables in a Rust application using Diesel. By following the steps outlined in this guide, you can easily define and manage one-to-one relationships between your models and their corresponding tables in the database.
+origin
