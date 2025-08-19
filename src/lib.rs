@@ -24,7 +24,8 @@ use relation_macro::diesel_linker_impl;
 ///
 /// - `model`: **(Required)** The name of the related model as a string (e.g., `"Post"`).
 /// - `relation_type`: **(Required)** The type of relationship. Can be `"one_to_many"`, `"many_to_one"`, `"one_to_one"`, or `"many_to_many"`.
-/// - `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"` and `"sqlite"`.
+/// - `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"`, `"sqlite"`, and `"mysql"`.
+/// - `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
 ///
 /// ## For `many_to_one`
 ///
@@ -40,9 +41,17 @@ use relation_macro::diesel_linker_impl;
 ///
 /// # Generated Methods
 ///
-/// The macro generates methods to fetch related objects. The method names are derived from the related model's name.
-/// - For `one-to-many` and `many-to-many`, it generates `get_<model_name_pluralized>()`. For example, a relation to `Post` will generate `get_posts()`.
-/// - For `one-to-one` and `many-to-one`, it generates `get_<model_name>()`. For example, a relation to `User` will generate `get_user()`.
+/// The macro generates two types of methods:
+///
+/// ## Lazy Loading
+///
+/// By default, methods are generated to fetch related objects on demand.
+/// - For `one-to-many` and `many-to-many`, it generates `get_<model_name_pluralized>()`.
+/// - For `one-to-one` and `many-to-one`, it generates `get_<model_name>()`.
+///
+/// ## Eager Loading
+///
+/// When `eager_loading = true` is set, an additional static method `load_with_<relation_name>()` is generated to solve the N+1 query problem. For `many_to_one` and `many_to_many` relations, the related models must derive `Clone`.
 ///
 /// # Example: `one-to-many` and `many-to-one`
 ///

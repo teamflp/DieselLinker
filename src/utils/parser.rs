@@ -15,6 +15,7 @@ pub struct ParsedAttrs {
     pub backend: Option<String>,
     pub primary_key: Option<String>,
     pub child_primary_key: Option<String>,
+    pub eager_loading: Option<bool>,
 }
 
 // Parses the attributes passed to the `relation` macro.
@@ -78,6 +79,11 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
                     "child_primary_key" => {
                         if let Lit::Str(s) = &nv.lit {
                             parsed_attrs.child_primary_key = Some(s.value())
+                        }
+                    }
+                    "eager_loading" => {
+                        if let Lit::Bool(b) = &nv.lit {
+                            parsed_attrs.eager_loading = Some(b.value())
                         }
                     }
                     _ => {
