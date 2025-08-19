@@ -15,7 +15,7 @@
 
 ```toml
 [dependencies]
-diesel = { version = "2.2.2", features = ["postgres", "sqlite"] } # Enable features for your database
+diesel = { version = "2.2.2", features = ["postgres", "sqlite", "mysql"] } # Enable features for your database
 diesel_linker = "1.2.0" # Use the latest version
 ```
 
@@ -29,7 +29,8 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 
 - `model`: **(Required)** The name of the related model as a string (e.g., `"Post"`).
 - `relation_type`: **(Required)** The type of relationship. Can be `"one_to_many"`, `"many_to_one"`, `"one_to_one"`, or `"many_to_many"`.
-- `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"` and `"sqlite"`.
+- `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"`, `"sqlite"`, and `"mysql"`.
+- `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
 
 #### Attributes for `many_to_one`
 
@@ -45,35 +46,22 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 
 ### Generated Methods
 
-The macro generates methods to fetch related objects. The method names are derived from the related model's name.
+#### Lazy Loading
+
+By default, the macro generates "lazy loading" methods that fetch related objects on demand.
 - For `one-to-many` and `many-to-many`, it generates `get_<model_name_pluralized>()`. For example, a relation to `Post` will generate `get_posts()`.
-- For `one-to-one` and `many-to-one`, it generates `get_<model_name>()`. For example, a relation to `User` will generate `get_user()`.
+- For `one-to-one` and `many_to_one`, it generates `get_<model_name>()`. For example, a relation to `User` will generate `get_user()`.
 
-### Example: `one-to-many` and `many-to-one`
+#### Eager Loading (with `eager_loading = true`)
 
-First, define your Diesel models and schema as you would normally.
+When `eager_loading = true` is set, an additional static method is generated to solve the N+1 query problem. This method takes a `Vec` of parent objects and returns a `Vec` of tuples, pairing each parent with its loaded children.
 
-```rust
-// In your schema.rs or similar
-table! {
-    users (id) {
-        id -> Int4,
-        name -> Varchar,
-    }
-}
+- The method is named `load_with_<relation_name>()`. For example, `load_with_posts()` or `load_with_user()`.
+- **Important:** For `many_to_one` and `many_to_many` relationships, the related models **must** derive `Clone`.
 
-table! {
-    posts (id) {
-        id -> Int4,
-        user_id -> Int4,
-        title -> Varchar,
-    }
-}
+### Example: Lazy vs. Eager Loading
 
-joinable!(posts -> users (user_id));
-```
-
-Then, add the `#[relation]` attribute to your models.
+First, define your models. Note the use of `eager_loading = true` and `#[derive(Clone)]`.
 
 ```rust
 // In your models.rs or similar
@@ -81,9 +69,9 @@ use super::schema::{users, posts};
 use diesel_linker::relation;
 
 // Parent model
-#[derive(Queryable, Identifiable, Debug)]
+#[derive(Queryable, Identifiable, Debug, Clone)] // Clone is needed for eager loading on Post
 #[diesel(table_name = users)]
-#[relation(model = "Post", relation_type = "one_to_many", backend = "sqlite")]
+#[relation(model = "Post", relation_type = "one_to_many", backend = "mysql", eager_loading = true)]
 pub struct User {
     pub id: i32,
     pub name: String,
@@ -92,7 +80,7 @@ pub struct User {
 // Child model
 #[derive(Queryable, Identifiable, Debug, Associations)]
 #[diesel(belongs_to(User), table_name = posts)]
-#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "sqlite")]
+#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "mysql")]
 pub struct Post {
     pub id: i32,
     pub user_id: i32,
@@ -105,24 +93,32 @@ Now you can use these methods in your application:
 ```rust
 fn main() {
     use diesel::prelude::*;
-    use diesel::sqlite::SqliteConnection;
-    // assuming you have your models and schema in a `db` module
+    use diesel::mysql::MysqlConnection;
     use your_project::db::models::{User, Post};
     use your_project::db::schema::users::dsl::*;
 
-
-    let mut connection = SqliteConnection::establish(":memory:").unwrap();
+    let mut connection = MysqlConnection::establish("...").unwrap();
     // setup your database here...
 
-    let user = users.find(1).first::<User>(&mut connection).expect("Error loading user");
-    let user_posts = user.get_posts(&mut connection).expect("Error loading user posts");
+    // --- Lazy Loading (N+1 queries) ---
+    let users_lazy = users.limit(5).load::<User>(&mut connection).expect("Error loading users");
+    for user in users_lazy {
+        // This line executes one additional query PER user
+        let user_posts = user.get_posts(&mut connection).expect("Error loading user posts");
+        println!("User {} has {} posts.", user.name, user_posts.len());
+    }
 
-    for post in user_posts {
-        println!("Title: {}", post.title);
+    // --- Eager Loading (2 queries total) ---
+    let all_users = users.load::<User>(&mut connection).expect("Error loading users");
+    // This line executes ONE additional query for ALL posts of ALL users
+    let users_with_posts = User::load_with_posts(all_users, &mut connection).expect("Error loading posts");
+
+    for (user, posts) in users_with_posts {
+        println!("User {} has {} posts.", user.name, posts.len());
     }
 }
 ```
 
 ## Conclusion
 
-The `diesel_linker` macro simplifies the definition of relationships between tables in a Rust application using Diesel. By following the steps outlined in this guide, you can easily define and manage relationships between your models.
+The `diesel_linker` macro simplifies the definition of relationships between tables in a Rust application using Diesel. By following the steps outlined in this guide, you can easily define and manage relationships between your models, and efficiently load them to prevent performance bottlenecks.
