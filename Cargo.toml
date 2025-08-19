@@ -14,7 +14,7 @@ readme = "README.md"
 proc-macro = true
 
 [dependencies]
-diesel = { version = "2.2.2", features = ["postgres", "postgres_backend"] }
+diesel = { version = "2.2.2", features = ["postgres", "postgres_backend", "sqlite"] }
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
