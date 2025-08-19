@@ -5,25 +5,27 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::ItemStruct;
 use syn::{self, parse_macro_input, AttributeArgs, Ident};
+use inflector::Inflector;
 
 #[derive(Debug)]
 pub struct RelationAttributes {
-    pub child_model: String,
+    pub model: String,
     pub fk: String,
     pub relation_type: String,
     pub join_table: Option<String>,
     pub fk_parent: Option<String>,
     pub fk_child: Option<String>,
+    pub method_name: Option<String>,
 }
 
 // Extracts the relation attributes from the attributes passed to the macro.
 fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttributes, syn::Error> {
     // Supposons que parsed_attrs contient déjà toutes les informations nécessaires
     Ok(RelationAttributes {
-        child_model: parsed_attrs
-            .child
+        model: parsed_attrs
+            .model
             .clone()
-            .ok_or_else(|| syn::Error::new(Span::call_site(), "child_model is missing"))?,
+            .ok_or_else(|| syn::Error::new(Span::call_site(), "model is missing"))?,
         fk: parsed_attrs
             .fk
             .clone()
@@ -35,28 +37,33 @@ fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttribut
         join_table: parsed_attrs.join_table.clone(),
         fk_parent: parsed_attrs.fk_parent.clone(),
         fk_child: parsed_attrs.fk_child.clone(),
+        method_name: parsed_attrs.method_name.clone(),
     })
 }
 pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(item as ItemStruct);
     let attrs = parse_macro_input!(attrs as AttributeArgs);
 
-    // Utilisation dela fonction parse_attributes pour obtenir un objet ParsedAttrs depuis attrs
-    let parsed_attrs = parse_attributes(attrs).expect("Failed to parse attributes");
+    let parsed_attrs = match parse_attributes(attrs) {
+        Ok(attrs) => attrs,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-    // On construit un objet ParsedAttrs qui sera utilisé
-    let relation_attrs =
-        extract_relation_attrs(&parsed_attrs).expect("Failed to extract relation attributes");
+    let relation_attrs = match extract_relation_attrs(&parsed_attrs) {
+        Ok(attrs) => attrs,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     let struct_name = &item_struct.ident;
     let gen_code = generate_relation_code(
         struct_name,
-        &relation_attrs.child_model,
+        &relation_attrs.model,
         &relation_attrs.fk,
         &relation_attrs.relation_type,
         relation_attrs.join_table,
         relation_attrs.fk_parent,
         relation_attrs.fk_child,
+        &relation_attrs.method_name,
     );
 
     TokenStream::from(quote! {
@@ -67,138 +74,128 @@ pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream 
 
 fn generate_relation_code(
     struct_name: &Ident,
-    child_model: &str,
-    fk: &str,
+    model: &str,
+    fk: &String,
     relation_type: &str,
     join_table: Option<String>,
     fk_parent: Option<String>,
     fk_child: Option<String>,
+    method_name: &Option<String>,
 ) -> proc_macro2::TokenStream {
-    let child_ident = Ident::new(child_model, proc_macro2::Span::call_site());
-    let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
+    let model_ident = Ident::new(model, proc_macro2::Span::call_site());
+
     match relation_type {
         "one_to_many" => {
-            // Générer le code pour la relation one_to_many
+            let get_method_name = method_name.as_ref().map(|s| Ident::new(s, proc_macro2::Span::call_site())).unwrap_or_else(|| Ident::new(&format!("get_{}", model.to_lowercase().to_plural()), proc_macro2::Span::call_site()));
+            let add_method_name = Ident::new(&format!("add_{}", model.to_lowercase().to_singular()), proc_macro2::Span::call_site());
+            let remove_method_name = Ident::new(&format!("remove_{}", model.to_lowercase().to_singular()), proc_macro2::Span::call_site());
+            let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
+
             quote! {
                 impl #struct_name {
-                    pub fn children<C>(&self, conn: &C) -> diesel::QueryResult<Vec<#child_ident>>
-                    where C: diesel::Connection,{
-                        use crate::schema::#child_ident::dsl::*;
+                    pub fn #get_method_name<C>(&self, conn: &mut C) -> diesel::QueryResult<Vec<#model_ident>>
+                    where C: diesel::Connection
+                    {
                         use diesel::prelude::*;
-
-                        #child_ident.filter(#fk_ident.eq(self.id)).load::<#child_ident>(conn)
+                        #model_ident::belonging_to(self).load::<#model_ident>(conn)
                     }
 
-                    pub fn add_child<C>(&self, conn: &C, new_child: &#child_ident) -> Result<usize, diesel::result::Error>
-                    where C: diesel::Connection, {
-                        use diesel::RunQueryDsl;
-                        diesel::insert_into(#child_ident::table).values(new_child).execute(conn)
+                    pub fn #add_method_name<C>(&self, conn: &mut C, child: &#model_ident) -> diesel::QueryResult<usize>
+                    where C: diesel::Connection
+                    {
+                        use diesel::prelude::*;
+                        diesel::update(child).set(crate::schema::#fk_ident.eq(self.id)).execute(conn)
                     }
 
-                    // Supprimer un enfant spécifique
-                    pub fn remove_child<C>(&self, conn: &C, child_id: i32) -> Result<usize, diesel::result::Error>
-                    where C: diesel::Connection, {
-                        use diesel::RunQueryDsl;
-                        diesel::delete(#child_ident.filter(id.eq(child_id).and(#fk_ident.eq(self.id)))).execute(conn)
+                    pub fn #remove_method_name<C>(&self, conn: &mut C, child: &#model_ident) -> diesel::QueryResult<usize>
+                    where C: diesel::Connection
+                    {
+                        use diesel::prelude::*;
+                        diesel::update(child).set(crate::schema::#fk_ident.eq(None::<i32>)).execute(conn)
                     }
                 }
             }
         }
         "many_to_one" => {
-            // Identifiant de l'entité parent et de la clé étrangère dans l'entité enfant.
-            let parent_model = "ParentModel"; // Replace "ParentModel" with the actual value of parent_model
-            let parent_ident = Ident::new(&parent_model, proc_macro2::Span::call_site());
+            let method_name = method_name.as_ref().map(|s| Ident::new(s, proc_macro2::Span::call_site())).unwrap_or_else(|| Ident::new(&format!("get_{}", model.to_lowercase()), proc_macro2::Span::call_site()));
             let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
-
             quote! {
                 impl #struct_name {
-                    // Récupère l'instance parente associée à cette instance enfant.
-                    pub fn get_parent<C>(&self, conn: &C) -> diesel::QueryResult<#parent_ident>
-                    where C: diesel::Connection, {
-                        use crate::schema::#parent_ident::dsl::*;
+                    pub fn #method_name<C>(&self, conn: &mut C) -> diesel::QueryResult<#model_ident>
+                    where C: diesel::Connection,
+                    {
                         use diesel::prelude::*;
-
-                        #parent_ident.filter(id.eq(self.#fk_ident)).first::<#parent_ident>(conn)
-                    }
-
-                    // Optionnellement, si vous voulez aussi définir la relation dans l'autre sens :
-                    impl #parent_ident {
-                        // Récupère toutes les instances enfants liées à cette instance parent.
-                        pub fn get_children<C>(&self, conn: &C) -> diesel::QueryResult<Vec<#struct_name>>
-                        where C: diesel::Connection, {
-                            use crate::schema::#struct_name::dsl::*;
-                            use diesel::prelude::*;
-
-                            #struct_name.filter(#fk_ident.eq(self.id)).load::<#struct_name>(conn)
-                        }
+                        crate::schema::#model_ident::table.find(self.#fk_ident).get_result::<#model_ident>(conn)
                     }
                 }
             }
         }
         "one_to_one" => {
-            let child_ident = Ident::new(&child_model, proc_macro2::Span::call_site());
-            let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
-
+            let method_name = method_name.as_ref().map(|s| Ident::new(s, proc_macro2::Span::call_site())).unwrap_or_else(|| Ident::new(&format!("get_{}", model.to_lowercase()), proc_macro2::Span::call_site()));
             quote! {
                 impl #struct_name {
-                    // Obtient l'entité liée depuis l'entité courante.
-                    pub fn get_related_entity<C>(&self, conn: &C) -> diesel::QueryResult<Option<#child_ident>>
-                    where C: diesel::Connection, {
-                        use crate::schema::#child_ident::dsl::*;
+                    pub fn #method_name<C>(&self, conn: &mut C) -> diesel::QueryResult<#model_ident>
+                    where C: diesel::Connection
+                    {
                         use diesel::prelude::*;
-
-                        #child_ident.filter(#fk_ident.eq(self.id)).first::<#child_ident>(conn).optional()
-                    }
-
-                    // Définit ou met à jour l'entité liée.
-                    pub fn set_related_entity<C>(&self, conn: &C, entity: &#child_ident) -> diesel::QueryResult<#child_ident>
-                    where C: diesel::Connection, {
-                        use diesel::RunQueryDsl;
-                        use crate::schema::#child_ident::dsl::*;
-
-                        diesel::insert_into(#child_ident::table)
-                            .values(entity)
-                            .on_conflict(#fk_ident)
-                            .do_update()
-                            .set(entity)
-                            .get_result::<#child_ident>(conn)
+                        #model_ident::belonging_to(self).first::<#model_ident>(conn)
                     }
                 }
             }
         }
         "many_to_many" => {
-            if let (Some(join_table), Some(fk_parent), Some(fk_child)) =
-                (join_table, fk_parent, fk_child)
-            {
+            if let (Some(join_table), Some(fk_parent), Some(fk_child)) = (join_table, fk_parent, fk_child) {
                 let join_table_ident = Ident::new(&join_table, proc_macro2::Span::call_site());
                 let parent_fk_ident = Ident::new(&fk_parent, proc_macro2::Span::call_site());
                 let child_fk_ident = Ident::new(&fk_child, proc_macro2::Span::call_site());
+                let get_method_name = method_name.as_ref().map(|s| Ident::new(s, proc_macro2::Span::call_site())).unwrap_or_else(|| Ident::new(&format!("get_{}", model.to_lowercase().to_plural()), proc_macro2::Span::call_site()));
+                let add_method_name = Ident::new(&format!("add_{}", model.to_lowercase().to_singular()), proc_macro2::Span::call_site());
+                let remove_method_name = Ident::new(&format!("remove_{}", model.to_lowercase().to_singular()), proc_macro2::Span::call_site());
 
                 quote! {
                     impl #struct_name {
-                        pub fn related_entities<C>(&self, conn: &C) -> diesel::QueryResult<Vec<#child_ident>>
+                        pub fn #get_method_name<C>(&self, conn: &mut C) -> diesel::QueryResult<Vec<#model_ident>>
                         where
                             C: diesel::Connection,
                         {
                             use diesel::prelude::*;
-                            use crate::schema::#join_table_ident::dsl as join_dsl;
-                            use crate::schema::#child_ident::dsl::*;
-
-                            let related_ids = join_dsl::#join_table_ident
-                                .filter(join_dsl::#parent_fk_ident.eq(self.id))
-                                .select(join_dsl::#child_fk_ident)
+                            let related_ids = crate::schema::#join_table_ident::table
+                                .filter(crate::schema::#parent_fk_ident.eq(self.id))
+                                .select(crate::schema::#child_fk_ident)
                                 .load::<i32>(conn)?;
+                            crate::schema::#model_ident::table.filter(crate::schema::id.eq_any(related_ids)).load::<#model_ident>(conn)
+                        }
 
-                            #child_ident.filter(id.eq_any(related_ids)).load::<#child_ident>(conn)
+                        pub fn #add_method_name<C>(&self, conn: &mut C, child: &#model_ident) -> diesel::QueryResult<usize>
+                        where
+                            C: diesel::Connection,
+                        {
+                            use diesel::prelude::*;
+                            diesel::insert_into(crate::schema::#join_table_ident::table)
+                                .values((crate::schema::#parent_fk_ident.eq(self.id), crate::schema::#child_fk_ident.eq(child.id)))
+                                .execute(conn)
+                        }
+
+                        pub fn #remove_method_name<C>(&self, conn: &mut C, child: &#model_ident) -> diesel::QueryResult<usize>
+                        where
+                            C: diesel::Connection,
+                        {
+                            use diesel::prelude::*;
+                            diesel::delete(crate::schema::#join_table_ident::table
+                                .filter(crate::schema::#parent_fk_ident.eq(self.id))
+                                .filter(crate::schema::#child_fk_ident.eq(child.id)))
+                                .execute(conn)
                         }
                     }
                 }
             } else {
                 quote! {
-                    compile_error!("join_table, fk_parent, and fk_child attributes are required for many_to_many relations");
+                    compile_error!("'join_table', 'fk_parent', and 'fk_child' attributes are required for 'many_to_many' relations");
                 }
             }
         }
-        _ => panic!("Unsupported relation type: {}", relation_type),
+        _ => quote! {
+            compile_error!("Unsupported relation type");
+        },
     }
 }
