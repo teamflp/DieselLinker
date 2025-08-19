@@ -108,7 +108,8 @@ fn generate_relation_code(
     let conn_type = match backend {
         "postgres" => quote! { diesel::pg::PgConnection },
         "sqlite" => quote! { diesel::sqlite::SqliteConnection },
-        _ => return quote! { compile_error!("Unsupported backend. Supported backends are 'postgres' and 'sqlite'."); }.into(),
+        "mysql" => quote! { diesel::mysql::MysqlConnection },
+        _ => return quote! { compile_error!("Unsupported backend. Supported backends are 'postgres', 'sqlite', and 'mysql'."); }.into(),
     };
 
     match relation_type {
