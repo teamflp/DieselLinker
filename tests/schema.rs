@@ -44,5 +44,23 @@ table! {
 
 joinable!(post_tags -> posts (post_id));
 joinable!(post_tags -> tags (tag_id));
+
+table! {
+    authors (id) {
+        id -> Integer,
+        name -> Text,
+    }
+}
+
+table! {
+    books (id) {
+        id -> Integer,
+        author_id -> Integer,
+        title -> Text,
+    }
+}
+
+joinable!(books -> authors (author_id));
+
 use diesel::allow_tables_to_appear_in_same_query;
-allow_tables_to_appear_in_same_query!(posts, post_tags, tags);
+allow_tables_to_appear_in_same_query!(posts, post_tags, tags, authors, books);
