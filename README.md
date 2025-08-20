@@ -33,6 +33,7 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 - `method_name`: **(Optional)** A string that specifies a custom name for the generated getter method. If not provided, a name is inferred from the model name (e.g., `get_posts` for a `Post` model).
 - `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
 - `async`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates `async` methods for use with `diesel-async`. Defaults to `false`.
+- `error_type`: **(Optional)** A string representing a custom error type to be used in the return type of the generated methods. The custom error type must implement `From<diesel::result::Error>`.
 
 #### Attributes for `many_to_one`
 
