@@ -80,7 +80,6 @@ fn setup_db() -> PgConnection {
 }
 
 #[test]
-#[ignore]
 fn test_one_to_many_get_pg() {
     let mut conn = setup_db();
 
@@ -103,7 +102,6 @@ fn test_one_to_many_get_pg() {
 }
 
 #[test]
-#[ignore]
 fn test_one_to_one_get_pg() {
     use crate::schema::{users, user_profiles};
     let mut conn = setup_db();
@@ -121,7 +119,6 @@ fn test_one_to_one_get_pg() {
 }
 
 #[test]
-#[ignore]
 fn test_many_to_many_get_pg() {
     use crate::schema::{users, posts, tags, post_tags};
     let mut conn = setup_db();
