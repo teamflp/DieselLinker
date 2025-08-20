@@ -1,0 +1,11 @@
+error: `fk` is not used for `many_to_many` relations. Use `fk_parent` and `fk_child` instead.
+  --> tests/ui/fail/04-fk-on-many-to-many.rs:10:5
+   |
+10 |     fk = "user_id", // This is not used for a many_to_many relation
+   |     ^^
+
+error[E0412]: cannot find type `User` in this scope
+ --> tests/ui/fail/04-fk-on-many-to-many.rs:6:10
+  |
+6 | #[derive(Debug)]
+  |          ^^^^^ not found in this scope

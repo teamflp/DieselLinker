@@ -1,0 +1,11 @@
+error: `join_table` is only used for `many_to_many` relations.
+  --> tests/ui/fail/03-superfluous-join-table.rs:11:5
+   |
+11 |     join_table = "users_posts", // This is not used for a many_to_one relation
+   |     ^^^^^^^^^^
+
+error[E0412]: cannot find type `Post` in this scope
+ --> tests/ui/fail/03-superfluous-join-table.rs:6:10
+  |
+6 | #[derive(Debug)]
+  |          ^^^^^ not found in this scope
