@@ -8,8 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  DATABASE_URL: postgres://postgres:postgres@localhost/diesel_linker_test
-  MYSQL_URL: mysql://root:password@localhost:3306/diesel_linker_test
+  DATABASE_URL: postgres://postgres:postgres@127.0.0.1/diesel_linker_test
+  MYSQL_URL: mysql://root:password@127.0.0.1:3306/diesel_linker_test
 
 jobs:
   test:
