@@ -218,7 +218,7 @@ fn test_custom_method_name() {
 }
 
 #[test]
-fn test_eager_loading_with_custom_pk() {
+fn test_many_to_one_with_custom_pk() {
     let mut conn = setup_custom_db();
 
     let new_publisher = Publisher { publisher_id: 1, name: "Penguin Books".to_string() };
@@ -233,6 +233,7 @@ fn test_eager_loading_with_custom_pk() {
     ];
     diesel::insert_into(books::table).values(&books_to_insert).execute(&mut conn).unwrap();
 
+    // --- Test Eager Loading ---
     let books = books::table.load::<Book>(&mut conn).unwrap();
     let books_with_publishers = Book::load_with_publisher(books, &mut conn).unwrap();
 
@@ -240,4 +241,10 @@ fn test_eager_loading_with_custom_pk() {
     for (_book, publisher) in books_with_publishers {
         assert_eq!(publisher.name, "Penguin Books");
     }
+
+    // --- Test Lazy Loading ---
+    let book = books::table.find(1).first::<Book>(&mut conn).unwrap();
+    // The default method name is get_<model_name> -> get_publisher
+    let publisher = book.get_publisher(&mut conn).unwrap();
+    assert_eq!(publisher.name, "Penguin Books");
 }

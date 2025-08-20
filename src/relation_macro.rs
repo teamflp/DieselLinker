@@ -153,12 +153,15 @@ fn generate_relation_code(
             let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
             let table_name = Ident::new(&model.to_plural().to_snake_case(), proc_macro2::Span::call_site());
 
+            let parent_primary_key_ident = Ident::new(parent_primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
             let lazy_load_code = quote! {
                 impl #struct_name {
                     pub fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
                     {
                         use diesel::prelude::*;
-                        crate::schema::#table_name::table.find(self.#fk_ident).get_result::<#model_ident>(conn)
+                        crate::schema::#table_name::table
+                            .filter(crate::schema::#table_name::#parent_primary_key_ident.eq(self.#fk_ident))
+                            .get_result::<#model_ident>(conn)
                     }
                 }
             };
