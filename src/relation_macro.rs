@@ -1,7 +1,6 @@
 use crate::utils::parser::parse_attributes;
 use crate::utils::parser::ParsedAttrs;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::quote;
 use syn::ItemStruct;
 use syn::{self, parse_macro_input, AttributeArgs, Ident};
@@ -24,35 +23,28 @@ pub struct RelationAttributes {
 
 // Extracts the relation attributes from the attributes passed to the macro.
 fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttributes, syn::Error> {
-    let relation_type = parsed_attrs
-        .relation_type
-        .clone()
-        .ok_or_else(|| syn::Error::new(Span::call_site(), "relation_type is missing"))?;
+    // The parser should have already validated the presence of required attributes.
+    // Here, we just unwrap them.
+    let relation_type = parsed_attrs.relation_type.as_ref().unwrap().value.clone();
 
     let fk = if relation_type == "many_to_one" {
-        parsed_attrs
-            .fk
-            .clone()
-            .ok_or_else(|| syn::Error::new(Span::call_site(), "fk is required for many_to_one relation"))?
+        parsed_attrs.fk.as_ref().unwrap().value.clone()
     } else {
-        parsed_attrs.fk.clone().unwrap_or_default()
+        parsed_attrs.fk.as_ref().map_or_else(String::new, |a| a.value.clone())
     };
 
     Ok(RelationAttributes {
-        model: parsed_attrs
-            .model
-            .clone()
-            .ok_or_else(|| syn::Error::new(Span::call_site(), "model is missing"))?,
+        model: parsed_attrs.model.as_ref().unwrap().value.clone(),
         fk,
         relation_type,
-        join_table: parsed_attrs.join_table.clone(),
-        fk_parent: parsed_attrs.fk_parent.clone(),
-        fk_child: parsed_attrs.fk_child.clone(),
-        method_name: parsed_attrs.method_name.clone(),
-        backend: parsed_attrs.backend.clone().unwrap(),
-        primary_key: parsed_attrs.primary_key.clone(),
-        child_primary_key: parsed_attrs.child_primary_key.clone(),
-        eager_loading: parsed_attrs.eager_loading.unwrap_or(false),
+        join_table: parsed_attrs.join_table.as_ref().map(|a| a.value.clone()),
+        fk_parent: parsed_attrs.fk_parent.as_ref().map(|a| a.value.clone()),
+        fk_child: parsed_attrs.fk_child.as_ref().map(|a| a.value.clone()),
+        method_name: parsed_attrs.method_name.as_ref().map(|a| a.value.clone()),
+        backend: parsed_attrs.backend.as_ref().unwrap().value.clone(),
+        primary_key: parsed_attrs.primary_key.as_ref().map(|a| a.value.clone()),
+        child_primary_key: parsed_attrs.child_primary_key.as_ref().map(|a| a.value.clone()),
+        eager_loading: parsed_attrs.eager_loading.as_ref().map_or(false, |a| a.value),
     })
 }
 pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream {
