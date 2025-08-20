@@ -122,3 +122,115 @@ fn main() {
 ## Conclusion
 
 The `diesel_linker` macro simplifies the definition of relationships between tables in a Rust application using Diesel. By following the steps outlined in this guide, you can easily define and manage relationships between your models, and efficiently load them to prevent performance bottlenecks.
+
+## Exemple d'utilisation
+
+Voici un exemple concret et auto-contenu que vous pouvez exécuter pour voir `DieselLinker` en action. Cet exemple utilise une base de données SQLite en mémoire, vous n'avez donc pas besoin de configurer une base de données externe.
+
+### 1. Dépendances
+
+Ajoutez les dépendances suivantes à votre fichier `Cargo.toml` :
+
+```toml
+[dependencies]
+diesel = { version = "2.1.0", features = ["sqlite"] }
+diesel_linker = "1.2.0"
+```
+
+### 2. Code de l'exemple
+
+Copiez-collez le code suivant dans votre `src/main.rs` et exécutez-le avec `cargo run`.
+
+```rust
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
+use diesel_linker::relation;
+
+// Définition du schéma de la base de données.
+// Dans un projet réel, cela serait dans `src/schema.rs` et généré par `diesel print-schema`.
+mod schema {
+    diesel::table! {
+        users (id) {
+            id -> Integer,
+            name -> Text,
+        }
+    }
+
+    diesel::table! {
+        posts (id) {
+            id -> Integer,
+            user_id -> Integer,
+            title -> Text,
+        }
+    }
+
+    diesel::joinable!(posts -> users (user_id));
+    diesel::allow_tables_to_appear_in_same_query!(users, posts);
+}
+
+// Définition des modèles.
+// Dans un projet réel, cela serait dans `src/models.rs`.
+
+use schema::{users, posts};
+
+#[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
+#[diesel(table_name = users)]
+// Définit une relation "un-à-plusieurs" vers le modèle `Post`.
+// DieselLinker générera une méthode `get_posts()` sur la structure `User`.
+#[relation(model = "Post", relation_type = "one_to_many", backend = "sqlite")]
+pub struct User {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq)]
+#[diesel(belongs_to(User), table_name = posts)]
+// Définit une relation "plusieurs-à-un" vers le modèle `User`.
+// DieselLinker générera une méthode `get_user()` sur la structure `Post`.
+#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "sqlite")]
+pub struct Post {
+    pub id: i32,
+    pub user_id: i32,
+    pub title: String,
+}
+
+
+fn main() {
+    // 1. Établir une connexion à une base de données SQLite en mémoire.
+    let mut conn = SqliteConnection::establish(":memory:").unwrap();
+
+    // 2. Créer les tables `users` et `posts`.
+    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
+
+    // 3. Insérer des données de test : un utilisateur et deux articles.
+    let new_user = User { id: 1, name: "Marie Curie".to_string() };
+    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).unwrap();
+
+    let user_posts = vec![
+        Post { id: 1, user_id: 1, title: "Recherches sur la radioactivité".to_string() },
+        Post { id: 2, user_id: 1, title: "Découverte du polonium et du radium".to_string() },
+    ];
+    diesel::insert_into(posts::table).values(&user_posts).execute(&mut conn).unwrap();
+
+    println!("--- Démonstration de DieselLinker ---");
+
+    // 4. Récupérer l'utilisateur depuis la base de données.
+    let user = users::table.find(1).first::<User>(&mut conn).unwrap();
+    println!("\nUtilisateur trouvé: {}", user.name);
+
+    // 5. Utiliser la méthode `get_posts()` générée par DieselLinker.
+    //    Cette méthode charge tous les articles associés à l'utilisateur.
+    println!("Récupération des articles de l'utilisateur...");
+    let posts = user.get_posts(&mut conn).unwrap();
+
+    println!("'{}' a écrit {} article(s):", user.name, posts.len());
+    for post in posts {
+        println!("- {}", post.title);
+
+        // On peut aussi remonter à l'auteur depuis l'article.
+        let author = post.get_user(&mut conn).unwrap();
+        assert_eq!(author.name, user.name);
+    }
+}
+```
