@@ -1,7 +1,6 @@
 use crate::utils::parser::parse_attributes;
 use crate::utils::parser::ParsedAttrs;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::quote;
 use syn::ItemStruct;
 use syn::{self, parse_macro_input, AttributeArgs, Ident};
@@ -12,6 +11,7 @@ pub struct RelationAttributes {
     pub model: String,
     pub fk: String,
     pub relation_type: String,
+    pub parent_primary_key: Option<String>,
     pub join_table: Option<String>,
     pub fk_parent: Option<String>,
     pub fk_child: Option<String>,
@@ -24,35 +24,29 @@ pub struct RelationAttributes {
 
 // Extracts the relation attributes from the attributes passed to the macro.
 fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttributes, syn::Error> {
-    let relation_type = parsed_attrs
-        .relation_type
-        .clone()
-        .ok_or_else(|| syn::Error::new(Span::call_site(), "relation_type is missing"))?;
+    // The parser should have already validated the presence of required attributes.
+    // Here, we just unwrap them.
+    let relation_type = parsed_attrs.relation_type.as_ref().unwrap().value.clone();
 
     let fk = if relation_type == "many_to_one" {
-        parsed_attrs
-            .fk
-            .clone()
-            .ok_or_else(|| syn::Error::new(Span::call_site(), "fk is required for many_to_one relation"))?
+        parsed_attrs.fk.as_ref().unwrap().value.clone()
     } else {
-        parsed_attrs.fk.clone().unwrap_or_default()
+        parsed_attrs.fk.as_ref().map_or_else(String::new, |a| a.value.clone())
     };
 
     Ok(RelationAttributes {
-        model: parsed_attrs
-            .model
-            .clone()
-            .ok_or_else(|| syn::Error::new(Span::call_site(), "model is missing"))?,
+        model: parsed_attrs.model.as_ref().unwrap().value.clone(),
         fk,
         relation_type,
-        join_table: parsed_attrs.join_table.clone(),
-        fk_parent: parsed_attrs.fk_parent.clone(),
-        fk_child: parsed_attrs.fk_child.clone(),
-        method_name: parsed_attrs.method_name.clone(),
-        backend: parsed_attrs.backend.clone().unwrap(),
-        primary_key: parsed_attrs.primary_key.clone(),
-        child_primary_key: parsed_attrs.child_primary_key.clone(),
-        eager_loading: parsed_attrs.eager_loading.unwrap_or(false),
+        parent_primary_key: parsed_attrs.parent_primary_key.as_ref().map(|a| a.value.clone()),
+        join_table: parsed_attrs.join_table.as_ref().map(|a| a.value.clone()),
+        fk_parent: parsed_attrs.fk_parent.as_ref().map(|a| a.value.clone()),
+        fk_child: parsed_attrs.fk_child.as_ref().map(|a| a.value.clone()),
+        method_name: parsed_attrs.method_name.as_ref().map(|a| a.value.clone()),
+        backend: parsed_attrs.backend.as_ref().unwrap().value.clone(),
+        primary_key: parsed_attrs.primary_key.as_ref().map(|a| a.value.clone()),
+        child_primary_key: parsed_attrs.child_primary_key.as_ref().map(|a| a.value.clone()),
+        eager_loading: parsed_attrs.eager_loading.as_ref().map_or(false, |a| a.value),
     })
 }
 pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream {
@@ -82,6 +76,7 @@ pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream 
         &relation_attrs.backend,
         &relation_attrs.primary_key,
         &relation_attrs.child_primary_key,
+        &relation_attrs.parent_primary_key,
         relation_attrs.eager_loading,
     );
 
@@ -103,6 +98,7 @@ fn generate_relation_code(
     backend: &str,
     primary_key: &Option<String>,
     child_primary_key: &Option<String>,
+    parent_primary_key: &Option<String>,
     eager_loading: bool,
 ) -> proc_macro2::TokenStream {
     let model_ident = Ident::new(model, proc_macro2::Span::call_site());
@@ -157,33 +153,37 @@ fn generate_relation_code(
             let fk_ident = Ident::new(fk, proc_macro2::Span::call_site());
             let table_name = Ident::new(&model.to_plural().to_snake_case(), proc_macro2::Span::call_site());
 
+            let parent_primary_key_ident = Ident::new(parent_primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
             let lazy_load_code = quote! {
                 impl #struct_name {
                     pub fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
                     {
                         use diesel::prelude::*;
-                        crate::schema::#table_name::table.find(self.#fk_ident).get_result::<#model_ident>(conn)
+                        crate::schema::#table_name::table
+                            .filter(crate::schema::#table_name::#parent_primary_key_ident.eq(self.#fk_ident))
+                            .get_result::<#model_ident>(conn)
                     }
                 }
             };
 
             let eager_load_code = if eager_loading {
                 let load_method_name = Ident::new(&format!("load_with_{}", model.to_lowercase()), proc_macro2::Span::call_site());
-                let parent_primary_key_ident = Ident::new("id", proc_macro2::Span::call_site());
+                let parent_primary_key_ident = Ident::new(parent_primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
 
                 quote! {
                     impl #struct_name {
-                        /// Eager loads the parent model. The parent model must derive `Clone` and have an `id: i32` field.
+                        /// Eager loads the parent model. The parent model must derive `Clone`.
                         pub fn #load_method_name(children: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, #model_ident)>> {
                             use diesel::prelude::*;
                             use std::collections::{HashMap, HashSet};
+                            use std::hash::Hash;
 
                             let parent_ids: HashSet<_> = children.iter().map(|c| c.#fk_ident).collect();
                             let parents = crate::schema::#table_name::table
                                 .filter(crate::schema::#table_name::#parent_primary_key_ident.eq_any(parent_ids.into_iter().collect::<Vec<_>>()))
                                 .load::<#model_ident>(conn)?;
 
-                            let parent_map: HashMap<_, _> = parents.into_iter().map(|p| (p.id, p)).collect();
+                            let parent_map: HashMap<_, _> = parents.into_iter().map(|p| (p.#parent_primary_key_ident, p)).collect();
 
                             let result = children.into_iter().filter_map(|c| {
                                 parent_map.get(&c.#fk_ident).map(|p| (c, p.clone()))

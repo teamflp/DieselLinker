@@ -1,0 +1,5 @@
+error: Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`
+ --> tests/ui/fail/01-unknown-attribute.rs:3:28
+  |
+3 | #[relation(model = "Post", wrong_attr = "some_value")]
+  |                            ^^^^^^^^^^

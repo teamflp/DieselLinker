@@ -1,0 +1,11 @@
+error: `fk` is not used for this relation type. The foreign key is defined on the child model with `#[diesel(belongs_to(...))]`.
+  --> tests/ui/fail/02-superfluous-fk.rs:10:5
+   |
+10 |     fk = "user_id", // This is not used for a one_to_one relation
+   |     ^^
+
+error[E0412]: cannot find type `UserProfile` in this scope
+ --> tests/ui/fail/02-superfluous-fk.rs:6:10
+  |
+6 | #[derive(Debug)]
+  |          ^^^^^ not found in this scope
