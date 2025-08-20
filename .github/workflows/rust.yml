@@ -1,98 +1,49 @@
-name: DieselLinker CI/CD
+name: Rust CI
 
 on:
   push:
-    branches: [ "development" ]
+    branches: [ "main", "development" ]
   pull_request:
-    branches: [ "development" ]
-
-permissions:
-  contents: read
-  id-token: write
-
-concurrency:
-  group: "diesel_linker-build-${{ github.ref }}"
-  cancel-in-progress: true
+    branches: [ "main", "development" ]
 
 env:
   CARGO_TERM_COLOR: always
+  DATABASE_URL: postgres://postgres:postgres@localhost/diesel_linker_test
+  MYSQL_URL: mysql://root:password@localhost:3306/diesel_linker_test
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 180  # Augmente le timeout à 3 heures
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          profile: minimal
-          components: rustfmt, clippy
-
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Build Docker Image
-        run: docker build -t diesel_linker:latest .
-
-      - name: Stop and Remove existing Docker container
-        run: |
-          if docker ps -a | grep -q diesel_linker; then
-            docker stop diesel_linker
-            docker rm diesel_linker
-          else
-            echo "No container to remove."
-          fi
-
-      - name: Run Docker Container
-        run: |
-          docker run -d --name diesel_linker --memory 4g diesel_linker:latest
-          sleep 5  # Attendre quelques secondes pour que le conteneur démarre
-
-      - name: Build Library in Docker Container
-        run: docker exec diesel_linker cargo build --verbose
-
-      - name: Run Tests in Docker Container
-        run: docker exec diesel_linker cargo test --verbose -- --test-threads=1
-
-  build:
-    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: diesel_linker_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: diesel_linker_test
+        ports:
+          - 3306:3306
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
 
-      # On met en cache les dépendances de Cargo pour accélérer le build
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpq-dev libmysqlclient-dev
 
-      - name: Build
-        run: cargo build --verbose
-
-      - name: Run tests
-        run: cargo test --verbose
+    - name: Run tests
+      run: cargo test

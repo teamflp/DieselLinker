@@ -71,7 +71,7 @@ pub struct PostTag {
 }
 
 fn setup_db() -> MysqlConnection {
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://test:test@localhost:3306/test".to_string());
+    let database_url = env::var("MYSQL_URL").unwrap_or_else(|_| "mysql://root:password@localhost:3306/diesel_linker_test".to_string());
     let mut conn = MysqlConnection::establish(&database_url).unwrap();
     diesel::sql_query("SET FOREIGN_KEY_CHECKS = 0;").execute(&mut conn).unwrap();
     diesel::sql_query("DROP TABLE IF EXISTS post_tags, tags, user_profiles, posts, users;").execute(&mut conn).unwrap();
