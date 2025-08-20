@@ -34,7 +34,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Cargo dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -81,7 +81,7 @@ jobs:
 
       # On met en cache les dépendances de Cargo pour accélérer le build
       - name: Cache Cargo dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
