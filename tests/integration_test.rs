@@ -142,3 +142,56 @@ fn test_many_to_many_get() {
     assert_eq!(posts.len(), 1);
     assert_eq!(posts[0].title, "First post");
 }
+
+// --- Test for custom method name ---
+
+use crate::schema::{authors, books};
+
+#[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
+#[diesel(table_name = authors)]
+#[relation(model = "Book", relation_type = "one_to_many", backend = "sqlite", method_name = "fetch_books")]
+pub struct Author {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq)]
+#[diesel(belongs_to(Author), table_name = books)]
+#[relation(model = "Author", fk = "author_id", relation_type = "many_to_one", backend = "sqlite", method_name = "fetch_author")]
+pub struct Book {
+    pub id: i32,
+    pub author_id: i32,
+    pub title: String,
+}
+
+fn setup_custom_db() -> SqliteConnection {
+    let mut conn = SqliteConnection::establish(":memory:").unwrap();
+    // The main setup_db() function already creates the tables we need for other tests.
+    // We just need to add the new tables here.
+    diesel::sql_query("CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE books (id INTEGER PRIMARY KEY, author_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
+    conn
+}
+
+#[test]
+fn test_custom_method_name() {
+    let mut conn = setup_custom_db();
+
+    let new_author = Author { id: 1, name: "George Orwell".to_string() };
+    diesel::insert_into(authors::table).values(&new_author).execute(&mut conn).unwrap();
+
+    let new_book = Book { id: 1, author_id: 1, title: "1984".to_string() };
+    diesel::insert_into(books::table).values(&new_book).execute(&mut conn).unwrap();
+
+    // Test the one-to-many relation with custom name
+    let author = authors::table.find(1).first::<Author>(&mut conn).unwrap();
+    let author_books = author.fetch_books(&mut conn).unwrap();
+
+    assert_eq!(author_books.len(), 1);
+    assert_eq!(author_books[0].title, "1984");
+
+    // Test the many-to-one relation with custom name
+    let book = books::table.find(1).first::<Book>(&mut conn).unwrap();
+    let book_author = book.fetch_author(&mut conn).unwrap();
+    assert_eq!(book_author.name, "George Orwell");
+}

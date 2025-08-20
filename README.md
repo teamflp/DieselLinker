@@ -30,6 +30,7 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 - `model`: **(Required)** The name of the related model as a string (e.g., `"Post"`).
 - `relation_type`: **(Required)** The type of relationship. Can be `"one_to_many"`, `"many_to_one"`, `"one_to_one"`, or `"many_to_many"`.
 - `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"`, `"sqlite"`, and `"mysql"`.
+- `method_name`: **(Optional)** A string that specifies a custom name for the generated getter method. If not provided, the name is inferred from the model name (e.g., `get_posts` for a `Post` model).
 - `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
 
 #### Attributes for `many_to_one`
