@@ -20,6 +20,7 @@ pub struct RelationAttributes {
     pub primary_key: Option<String>,
     pub child_primary_key: Option<String>,
     pub eager_loading: bool,
+    pub async_: bool,
 }
 
 // Extracts the relation attributes from the attributes passed to the macro.
@@ -47,6 +48,7 @@ fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttribut
         primary_key: parsed_attrs.primary_key.as_ref().map(|a| a.value.clone()),
         child_primary_key: parsed_attrs.child_primary_key.as_ref().map(|a| a.value.clone()),
         eager_loading: parsed_attrs.eager_loading.as_ref().map_or(false, |a| a.value),
+        async_: parsed_attrs.async_.as_ref().map_or(false, |a| a.value),
     })
 }
 pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream {
@@ -78,6 +80,7 @@ pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream 
         &relation_attrs.child_primary_key,
         &relation_attrs.parent_primary_key,
         relation_attrs.eager_loading,
+        relation_attrs.async_,
     );
 
     TokenStream::from(quote! {
@@ -100,17 +103,37 @@ fn generate_relation_code(
     child_primary_key: &Option<String>,
     parent_primary_key: &Option<String>,
     eager_loading: bool,
+    async_: bool,
 ) -> proc_macro2::TokenStream {
     let model_ident = Ident::new(model, proc_macro2::Span::call_site());
     let primary_key_ident = Ident::new(primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
     let child_primary_key_ident = Ident::new(child_primary_key.as_deref().unwrap_or(primary_key.as_deref().unwrap_or("id")), proc_macro2::Span::call_site());
 
-    let conn_type = match backend {
-        "postgres" => quote! { diesel::pg::PgConnection },
-        "sqlite" => quote! { diesel::sqlite::SqliteConnection },
-        "mysql" => quote! { diesel::mysql::MysqlConnection },
-        _ => return quote! { compile_error!("Unsupported backend. Supported backends are 'postgres', 'sqlite', and 'mysql'."); }.into(),
+    let (conn_type, use_diesel_async) = if async_ {
+        (
+            match backend {
+                "postgres" => quote! { diesel_async::AsyncPgConnection },
+                "sqlite" => quote! { diesel_async::sync_connection_wrapper::SyncConnectionWrapper<diesel::sqlite::SqliteConnection> },
+                "mysql" => quote! { diesel_async::AsyncMysqlConnection },
+                _ => return quote! { compile_error!("Unsupported backend for async. Supported backends are 'postgres', 'sqlite', and 'mysql'."); }.into(),
+            },
+            quote! { use diesel_async::RunQueryDsl; }
+        )
+    } else {
+        (
+            match backend {
+                "postgres" => quote! { diesel::pg::PgConnection },
+                "sqlite" => quote! { diesel::sqlite::SqliteConnection },
+                "mysql" => quote! { diesel::mysql::MysqlConnection },
+                _ => return quote! { compile_error!("Unsupported backend. Supported backends are 'postgres', 'sqlite', and 'mysql'."); }.into(),
+            },
+            quote! {}
+        )
     };
+
+    let async_trait = if async_ { quote! { async } } else { quote! {} };
+    let await_kw = if async_ { quote! { .await } } else { quote! {} };
+
 
     match relation_type {
         "one_to_many" => {
@@ -118,10 +141,11 @@ fn generate_relation_code(
 
             let lazy_load_code = quote! {
                 impl #struct_name {
-                    pub fn #get_method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<Vec<#model_ident>>
+                    pub #async_trait fn #get_method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<Vec<#model_ident>>
                     {
                         use diesel::prelude::*;
-                        #model_ident::belonging_to(self).load::<#model_ident>(conn)
+                        #use_diesel_async
+                        #model_ident::belonging_to(self).load::<#model_ident>(conn)#await_kw
                     }
                 }
             };
@@ -130,9 +154,10 @@ fn generate_relation_code(
                 let load_method_name = Ident::new(&format!("load_with_{}", model.to_lowercase().to_plural()), proc_macro2::Span::call_site());
                 quote! {
                     impl #struct_name {
-                        pub fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
+                        pub #async_trait fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
                             use diesel::prelude::*;
-                            let children = #model_ident::belonging_to(&parents).load::<#model_ident>(conn)?;
+                            #use_diesel_async
+                            let children = #model_ident::belonging_to(&parents).load::<#model_ident>(conn)#await_kw?;
                             let grouped_children = children.grouped_by(&parents);
                             let result = parents.into_iter().zip(grouped_children).collect::<Vec<_>>();
                             Ok(result)
@@ -156,12 +181,13 @@ fn generate_relation_code(
             let parent_primary_key_ident = Ident::new(parent_primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
             let lazy_load_code = quote! {
                 impl #struct_name {
-                    pub fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
+                    pub #async_trait fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
                     {
                         use diesel::prelude::*;
+                        #use_diesel_async
                         crate::schema::#table_name::table
                             .filter(crate::schema::#table_name::#parent_primary_key_ident.eq(self.#fk_ident))
-                            .get_result::<#model_ident>(conn)
+                            .get_result::<#model_ident>(conn)#await_kw
                     }
                 }
             };
@@ -173,15 +199,16 @@ fn generate_relation_code(
                 quote! {
                     impl #struct_name {
                         /// Eager loads the parent model. The parent model must derive `Clone`.
-                        pub fn #load_method_name(children: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, #model_ident)>> {
+                        pub #async_trait fn #load_method_name(children: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, #model_ident)>> {
                             use diesel::prelude::*;
                             use std::collections::{HashMap, HashSet};
                             use std::hash::Hash;
+                            #use_diesel_async
 
                             let parent_ids: HashSet<_> = children.iter().map(|c| c.#fk_ident).collect();
                             let parents = crate::schema::#table_name::table
                                 .filter(crate::schema::#table_name::#parent_primary_key_ident.eq_any(parent_ids.into_iter().collect::<Vec<_>>()))
-                                .load::<#model_ident>(conn)?;
+                                .load::<#model_ident>(conn)#await_kw?;
 
                             let parent_map: HashMap<_, _> = parents.into_iter().map(|p| (p.#parent_primary_key_ident, p)).collect();
 
@@ -207,10 +234,11 @@ fn generate_relation_code(
 
             let lazy_load_code = quote! {
                 impl #struct_name {
-                    pub fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
+                    pub #async_trait fn #method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<#model_ident>
                     {
                         use diesel::prelude::*;
-                        #model_ident::belonging_to(self).first::<#model_ident>(conn)
+                        #use_diesel_async
+                        #model_ident::belonging_to(self).first::<#model_ident>(conn)#await_kw
                     }
                 }
             };
@@ -219,9 +247,10 @@ fn generate_relation_code(
                 let load_method_name = Ident::new(&format!("load_with_{}", model.to_lowercase()), proc_macro2::Span::call_site());
                 quote! {
                     impl #struct_name {
-                        pub fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
+                        pub #async_trait fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
                             use diesel::prelude::*;
-                            let children = #model_ident::belonging_to(&parents).load::<#model_ident>(conn)?;
+                            #use_diesel_async
+                            let children = #model_ident::belonging_to(&parents).load::<#model_ident>(conn)#await_kw?;
                             let grouped_children = children.grouped_by(&parents);
                             let result = parents.into_iter().zip(grouped_children).collect::<Vec<_>>();
                             Ok(result)
@@ -249,31 +278,34 @@ fn generate_relation_code(
 
                 let lazy_load_code = quote! {
                     impl #struct_name {
-                        pub fn #get_method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<Vec<#model_ident>>
+                        pub #async_trait fn #get_method_name(&self, conn: &mut #conn_type) -> diesel::QueryResult<Vec<#model_ident>>
                         {
                             use diesel::prelude::*;
+                            #use_diesel_async
                             let related_ids = crate::schema::#join_table_ident::table
                                 .filter(crate::schema::#join_table_ident::#parent_fk_ident.eq(self.#primary_key_ident))
                                 .select(crate::schema::#join_table_ident::#child_fk_ident)
-                                .load::<i32>(conn)?;
-                            crate::schema::#model_table_name::table.filter(crate::schema::#model_table_name::#child_primary_key_ident.eq_any(related_ids)).load::<#model_ident>(conn)
+                                .load::<i32>(conn)#await_kw?;
+                            crate::schema::#model_table_name::table.filter(crate::schema::#model_table_name::#child_primary_key_ident.eq_any(related_ids)).load::<#model_ident>(conn)#await_kw
                         }
 
-                        pub fn #add_method_name(&self, conn: &mut #conn_type, child: &#model_ident) -> diesel::QueryResult<usize>
+                        pub #async_trait fn #add_method_name(&self, conn: &mut #conn_type, child: &#model_ident) -> diesel::QueryResult<usize>
                         {
                             use diesel::prelude::*;
+                            #use_diesel_async
                             diesel::insert_into(crate::schema::#join_table_ident::table)
                                 .values((crate::schema::#join_table_ident::#parent_fk_ident.eq(self.#primary_key_ident), crate::schema::#join_table_ident::#child_fk_ident.eq(child.#child_primary_key_ident)))
-                                .execute(conn)
+                                .execute(conn)#await_kw
                         }
 
-                        pub fn #remove_method_name(&self, conn: &mut #conn_type, child: &#model_ident) -> diesel::QueryResult<usize>
+                        pub #async_trait fn #remove_method_name(&self, conn: &mut #conn_type, child: &#model_ident) -> diesel::QueryResult<usize>
                         {
                             use diesel::prelude::*;
+                            #use_diesel_async
                             diesel::delete(crate::schema::#join_table_ident::table
                                 .filter(crate::schema::#join_table_ident::#parent_fk_ident.eq(self.#primary_key_ident))
                                 .filter(crate::schema::#join_table_ident::#child_fk_ident.eq(child.#child_primary_key_ident)))
-                                .execute(conn)
+                                .execute(conn)#await_kw
                         }
                     }
                 };
@@ -282,9 +314,10 @@ fn generate_relation_code(
                     let load_method_name = Ident::new(&format!("load_with_{}", model.to_lowercase().to_plural()), proc_macro2::Span::call_site());
                     quote! {
                         impl #struct_name {
-                            pub fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
+                            pub #async_trait fn #load_method_name(parents: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, Vec<#model_ident>)>> {
                                 use diesel::prelude::*;
                                 use std::collections::HashMap;
+                                #use_diesel_async
 
                                 let parent_ids: Vec<_> = parents.iter().map(|p| p.#primary_key_ident).collect();
 
@@ -292,7 +325,7 @@ fn generate_relation_code(
                                     .inner_join(crate::schema::#join_table_ident::table.on(crate::schema::#model_table_name::#child_primary_key_ident.eq(crate::schema::#join_table_ident::#child_fk_ident)))
                                     .filter(crate::schema::#join_table_ident::#parent_fk_ident.eq_any(parent_ids))
                                     .select((crate::schema::#model_table_name::all_columns, crate::schema::#join_table_ident::#parent_fk_ident))
-                                    .load::<(#model_ident, i32)>(conn)?;
+                                    .load::<(#model_ident, i32)>(conn)#await_kw?;
 
                                 let mut grouped_children: HashMap<i32, Vec<#model_ident>> = HashMap::new();
                                 for (child, parent_id) in children_with_fk {
