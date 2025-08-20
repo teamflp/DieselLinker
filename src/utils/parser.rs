@@ -29,6 +29,7 @@ pub struct ParsedAttrs {
     pub primary_key: Option<Attr<String>>,
     pub child_primary_key: Option<Attr<String>>,
     pub eager_loading: Option<Attr<bool>>,
+    pub async_: Option<Attr<bool>>,
 }
 
 // Parses the attributes passed to the `relation` macro.
@@ -104,10 +105,15 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
                         parsed_attrs.eager_loading = Some(Attr::new(b.value(), span));
                     }
                 }
+                "async" => {
+                    if let Lit::Bool(b) = &nv.lit {
+                        parsed_attrs.async_ = Some(Attr::new(b.value(), span));
+                    }
+                }
                 _ => {
                     return Err(Error::new(
                         nv.path.span(),
-                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`",
+                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`, `async`",
                     ))
                 }
             }
