@@ -11,6 +11,7 @@ pub struct RelationAttributes {
     pub model: String,
     pub fk: String,
     pub relation_type: String,
+    pub parent_primary_key: Option<String>,
     pub join_table: Option<String>,
     pub fk_parent: Option<String>,
     pub fk_child: Option<String>,
@@ -37,6 +38,7 @@ fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttribut
         model: parsed_attrs.model.as_ref().unwrap().value.clone(),
         fk,
         relation_type,
+        parent_primary_key: parsed_attrs.parent_primary_key.as_ref().map(|a| a.value.clone()),
         join_table: parsed_attrs.join_table.as_ref().map(|a| a.value.clone()),
         fk_parent: parsed_attrs.fk_parent.as_ref().map(|a| a.value.clone()),
         fk_child: parsed_attrs.fk_child.as_ref().map(|a| a.value.clone()),
@@ -74,6 +76,7 @@ pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream 
         &relation_attrs.backend,
         &relation_attrs.primary_key,
         &relation_attrs.child_primary_key,
+        &relation_attrs.parent_primary_key,
         relation_attrs.eager_loading,
     );
 
@@ -95,6 +98,7 @@ fn generate_relation_code(
     backend: &str,
     primary_key: &Option<String>,
     child_primary_key: &Option<String>,
+    parent_primary_key: &Option<String>,
     eager_loading: bool,
 ) -> proc_macro2::TokenStream {
     let model_ident = Ident::new(model, proc_macro2::Span::call_site());
@@ -161,21 +165,22 @@ fn generate_relation_code(
 
             let eager_load_code = if eager_loading {
                 let load_method_name = Ident::new(&format!("load_with_{}", model.to_lowercase()), proc_macro2::Span::call_site());
-                let parent_primary_key_ident = Ident::new("id", proc_macro2::Span::call_site());
+                let parent_primary_key_ident = Ident::new(parent_primary_key.as_deref().unwrap_or("id"), proc_macro2::Span::call_site());
 
                 quote! {
                     impl #struct_name {
-                        /// Eager loads the parent model. The parent model must derive `Clone` and have an `id: i32` field.
+                        /// Eager loads the parent model. The parent model must derive `Clone`.
                         pub fn #load_method_name(children: Vec<#struct_name>, conn: &mut #conn_type) -> diesel::QueryResult<Vec<(#struct_name, #model_ident)>> {
                             use diesel::prelude::*;
                             use std::collections::{HashMap, HashSet};
+                            use std::hash::Hash;
 
                             let parent_ids: HashSet<_> = children.iter().map(|c| c.#fk_ident).collect();
                             let parents = crate::schema::#table_name::table
                                 .filter(crate::schema::#table_name::#parent_primary_key_ident.eq_any(parent_ids.into_iter().collect::<Vec<_>>()))
                                 .load::<#model_ident>(conn)?;
 
-                            let parent_map: HashMap<_, _> = parents.into_iter().map(|p| (p.id, p)).collect();
+                            let parent_map: HashMap<_, _> = parents.into_iter().map(|p| (p.#parent_primary_key_ident, p)).collect();
 
                             let result = children.into_iter().filter_map(|c| {
                                 parent_map.get(&c.#fk_ident).map(|p| (c, p.clone()))

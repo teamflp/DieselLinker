@@ -20,6 +20,7 @@ pub struct ParsedAttrs {
     pub relation_type: Option<Attr<String>>,
     pub model: Option<Attr<String>>,
     pub fk: Option<Attr<String>>,         // Foreign key for the relation. Required for `many_to_one`.
+    pub parent_primary_key: Option<Attr<String>>, // Primary key of the parent model for `many_to_one` eager loading.
     pub join_table: Option<Attr<String>>, // Join table for `many_to_many` relations.
     pub fk_parent: Option<Attr<String>>,  // Foreign key in the join table pointing to the parent model.
     pub fk_child: Option<Attr<String>>,   // Foreign key in the join table pointing to the child model.
@@ -56,6 +57,11 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
                 "fk" => {
                     if let Lit::Str(s) = &nv.lit {
                         parsed_attrs.fk = Some(Attr::new(s.value(), span));
+                    }
+                }
+                "parent_primary_key" => {
+                    if let Lit::Str(s) = &nv.lit {
+                        parsed_attrs.parent_primary_key = Some(Attr::new(s.value(), span));
                     }
                 }
                 "join_table" => {
@@ -101,7 +107,7 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
                 _ => {
                     return Err(Error::new(
                         nv.path.span(),
-                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`",
+                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`",
                     ))
                 }
             }
@@ -155,6 +161,11 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
             }
             if let Some(attr) = &parsed_attrs.join_table {
                 return Err(Error::new(attr.span, "`join_table` is only used for `many_to_many` relations."));
+            }
+            if let Some(attr) = &parsed_attrs.parent_primary_key {
+                if !parsed_attrs.eager_loading.as_ref().map_or(false, |a| a.value) {
+                    return Err(Error::new(attr.span, "`parent_primary_key` is only used for eager loading."));
+                }
             }
         }
         "many_to_many" => {
