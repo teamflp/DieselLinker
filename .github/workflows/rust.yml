@@ -54,4 +54,5 @@ jobs:
       run: sleep 15 # Wait for mysql to be ready. A better solution would be to use a script that polls the db.
 
     - name: Run tests
+
       run: cargo test -- --test-threads=1
