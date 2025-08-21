@@ -7,7 +7,7 @@ authors = ["Paterne G. G. paterne81@hotmail.fr"]
 repository = "https://github.com/teamflp/DieselLinker"
 license = "MIT OR Apache-2.0"
 keywords = ["diesel", "proc-macro", "linker", "relation", "database"]
-categories = ["database", "diesel"]
+categories = ["database"]
 readme = "README.md"
 
 [lib]
