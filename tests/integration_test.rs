@@ -248,3 +248,53 @@ fn test_many_to_one_with_custom_pk() {
     let publisher = book.get_publisher(&mut conn).unwrap();
     assert_eq!(publisher.name, "Penguin Books");
 }
+
+// --- Test for custom error type ---
+
+use crate::schema::papers;
+
+#[derive(Debug)]
+pub enum MyError {
+    DieselError(diesel::result::Error),
+    // Other error variants
+}
+
+impl From<diesel::result::Error> for MyError {
+    fn from(err: diesel::result::Error) -> MyError {
+        MyError::DieselError(err)
+    }
+}
+
+#[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq)]
+#[diesel(belongs_to(Scientist), table_name = papers)]
+pub struct Paper {
+    pub id: i32,
+    pub scientist_id: i32,
+    pub title: String,
+}
+
+#[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
+#[diesel(table_name = users)]
+#[relation(model = "Paper", relation_type = "one_to_many", backend = "sqlite", error_type = "MyError")]
+pub struct Scientist {
+    pub id: i32,
+    pub name: String,
+}
+
+#[test]
+fn test_custom_error_type() {
+    let mut conn = setup_db();
+    diesel::sql_query("CREATE TABLE papers (id INTEGER PRIMARY KEY, scientist_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
+
+    let new_scientist = Scientist { id: 1, name: "Marie Curie".to_string() };
+    diesel::insert_into(users::table).values(&new_scientist).execute(&mut conn).unwrap();
+
+    let new_paper = Paper { id: 1, scientist_id: 1, title: "Recherches sur les substances radioactives".to_string() };
+    diesel::insert_into(papers::table).values(&new_paper).execute(&mut conn).unwrap();
+
+    let scientist = users::table.find(1).first::<Scientist>(&mut conn).unwrap();
+    let papers = scientist.get_papers(&mut conn).unwrap();
+
+    assert_eq!(papers.len(), 1);
+    assert_eq!(papers[0].title, "Recherches sur les substances radioactives");
+}

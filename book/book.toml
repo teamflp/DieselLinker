@@ -1,0 +1,6 @@
+[book]
+title = "DieselLinker Documentation"
+authors = ["Paterne G. G."]
+language = "en"
+multilingual = false
+src = "src"
