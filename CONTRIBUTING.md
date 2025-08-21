@@ -74,7 +74,6 @@ Please note that the test suite includes integration tests that may require runn
 
 1.  Create a new branch for your changes:
     ```sh
-
     git checkout -b my-feature-branch
     ```
 2.  Make your changes and commit them with a descriptive message.
