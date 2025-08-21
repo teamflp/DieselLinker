@@ -21,7 +21,7 @@ We welcome any type of contribution, not only code. You can help with:
 1.  Fork the repository on GitHub.
 2.  Clone your fork locally:
     ```sh
-    git clone https://github.com/your-username/DieselLinker.git
+    git clone https://github.com/teamflp/DieselLinker.git
     cd DieselLinker
     ```
 
