@@ -1,7 +1,7 @@
 // Path: src/utils/parser.rs
 
 use proc_macro2::Span;
-use syn::{spanned::Spanned, AttributeArgs, Error, Lit, Meta, NestedMeta, Result};
+use syn::{spanned::Spanned, Error, Lit, Meta, Result};
 
 #[derive(Debug)]
 pub struct Attr<T> {
@@ -29,14 +29,16 @@ pub struct ParsedAttrs {
     pub primary_key: Option<Attr<String>>,
     pub child_primary_key: Option<Attr<String>>,
     pub eager_loading: Option<Attr<bool>>,
+    pub async_: Option<Attr<bool>>,
+    pub error_type: Option<Attr<String>>,
 }
 
 // Parses the attributes passed to the `relation` macro.
-pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
+pub fn parse_attributes(attrs: Vec<Meta>) -> Result<ParsedAttrs> {
     let mut parsed_attrs = ParsedAttrs::default();
 
     for attr in attrs {
-        if let NestedMeta::Meta(Meta::NameValue(nv)) = attr {
+        if let Meta::NameValue(nv) = attr {
             let ident = nv
                 .path
                 .get_ident()
@@ -104,10 +106,20 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
                         parsed_attrs.eager_loading = Some(Attr::new(b.value(), span));
                     }
                 }
+                "async" => {
+                    if let Lit::Bool(b) = &nv.lit {
+                        parsed_attrs.async_ = Some(Attr::new(b.value(), span));
+                    }
+                }
+                "error_type" => {
+                    if let Lit::Str(s) = &nv.lit {
+                        parsed_attrs.error_type = Some(Attr::new(s.value(), span));
+                    }
+                }
                 _ => {
                     return Err(Error::new(
                         nv.path.span(),
-                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`",
+                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`, `async`, `error_type`",
                     ))
                 }
             }
@@ -200,15 +212,15 @@ pub fn parse_attributes(attrs: AttributeArgs) -> Result<ParsedAttrs> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::{parse_quote, NestedMeta};
+    use syn::parse_quote;
 
     #[test]
     fn test_valid_many_to_one() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "many_to_one" }),
-            NestedMeta::Meta(parse_quote! { model = "User" }),
-            NestedMeta::Meta(parse_quote! { fk = "user_id" }),
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { relation_type = "many_to_one" },
+            parse_quote! { model = "User" },
+            parse_quote! { fk = "user_id" },
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_ok());
@@ -221,12 +233,12 @@ mod tests {
     #[test]
     fn test_valid_many_to_many() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "many_to_many" }),
-            NestedMeta::Meta(parse_quote! { model = "Tag" }),
-            NestedMeta::Meta(parse_quote! { join_table = "post_tags" }),
-            NestedMeta::Meta(parse_quote! { fk_parent = "post_id" }),
-            NestedMeta::Meta(parse_quote! { fk_child = "tag_id" }),
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { relation_type = "many_to_many" },
+            parse_quote! { model = "Tag" },
+            parse_quote! { join_table = "post_tags" },
+            parse_quote! { fk_parent = "post_id" },
+            parse_quote! { fk_child = "tag_id" },
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_ok());
@@ -242,9 +254,9 @@ mod tests {
     #[test]
     fn test_valid_one_to_one() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "one_to_one" }),
-            NestedMeta::Meta(parse_quote! { model = "Profile" }),
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { relation_type = "one_to_one" },
+            parse_quote! { model = "Profile" },
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_ok());
@@ -257,10 +269,10 @@ mod tests {
     #[test]
     fn test_superfluous_fk_is_err() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "one_to_one" }),
-            NestedMeta::Meta(parse_quote! { model = "users" }),
-            NestedMeta::Meta(parse_quote! { fk = "user_id" }), // `fk` is not used for one_to_one
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { relation_type = "one_to_one" },
+            parse_quote! { model = "users" },
+            parse_quote! { fk = "user_id" }, // `fk` is not used for one_to_one
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_err());
@@ -270,11 +282,11 @@ mod tests {
     #[test]
     fn test_superfluous_join_table_is_err() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "many_to_one" }),
-            NestedMeta::Meta(parse_quote! { model = "User" }),
-            NestedMeta::Meta(parse_quote! { fk = "user_id" }),
-            NestedMeta::Meta(parse_quote! { join_table = "user_posts" }), // `join_table` is not used for many_to_one
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { relation_type = "many_to_one" },
+            parse_quote! { model = "User" },
+            parse_quote! { fk = "user_id" },
+            parse_quote! { join_table = "user_posts" }, // `join_table` is not used for many_to_one
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_err());
@@ -284,10 +296,10 @@ mod tests {
     #[test]
     fn test_missing_fk_for_many_to_one_is_err() {
         let attrs = vec![
-            NestedMeta::Meta(parse_quote! { relation_type = "many_to_one" }),
-            NestedMeta::Meta(parse_quote! { model = "users" }),
+            parse_quote! { relation_type = "many_to_one" },
+            parse_quote! { model = "users" },
             // `fk` is missing
-            NestedMeta::Meta(parse_quote! { backend = "sqlite" }),
+            parse_quote! { backend = "sqlite" },
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_err());
