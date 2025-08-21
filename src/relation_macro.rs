@@ -3,7 +3,10 @@ use crate::utils::parser::ParsedAttrs;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::ItemStruct;
-use syn::{self, parse_macro_input, AttributeArgs, Ident};
+use syn::{self, parse_macro_input, Ident, Meta};
+use syn::parse::Parser;
+use syn::punctuated::Punctuated;
+use syn::Token;
 use inflector::Inflector;
 
 #[derive(Debug)]
@@ -55,9 +58,12 @@ fn extract_relation_attrs(parsed_attrs: &ParsedAttrs) -> Result<RelationAttribut
 }
 pub fn diesel_linker_impl(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let item_struct = parse_macro_input!(item as ItemStruct);
-    let attrs = parse_macro_input!(attrs as AttributeArgs);
+    let attrs = match Punctuated::<Meta, Token![,]>::parse_terminated.parse(attrs.into()) {
+        Ok(attrs) => attrs,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-    let parsed_attrs = match parse_attributes(attrs) {
+    let parsed_attrs = match parse_attributes(attrs.into_iter().collect()) {
         Ok(attrs) => attrs,
         Err(e) => return e.to_compile_error().into(),
     };

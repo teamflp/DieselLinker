@@ -21,7 +21,7 @@ We welcome any type of contribution, not only code. You can help with:
 1.  Fork the repository on GitHub.
 2.  Clone your fork locally:
     ```sh
-    git clone https://github.com/teamflp/DieselLinker.git
+    git clone https://github.com/your-username/DieselLinker.git
     cd DieselLinker
     ```
 
@@ -74,6 +74,7 @@ Please note that the test suite includes integration tests that may require runn
 
 1.  Create a new branch for your changes:
     ```sh
+sh
     git checkout -b my-feature-branch
     ```
 2.  Make your changes and commit them with a descriptive message.
