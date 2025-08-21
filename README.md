@@ -30,8 +30,10 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 - `model`: **(Required)** The name of the related model as a string (e.g., `"Post"`).
 - `relation_type`: **(Required)** The type of relationship. Can be `"one_to_many"`, `"many_to_one"`, `"one_to_one"`, or `"many_to_many"`.
 - `backend`: **(Required)** The database backend you are using. Supported values are `"postgres"`, `"sqlite"`, and `"mysql"`.
-- `method_name`: **(Optional)** A string that specifies a custom name for the generated getter method. If not provided, the name is inferred from the model name (e.g., `get_posts` for a `Post` model).
+- `method_name`: **(Optional)** A string that specifies a custom name for the generated getter method. If not provided, a name is inferred from the model name (e.g., `get_posts` for a `Post` model).
 - `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
+- `async`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates `async` methods for use with `diesel-async`. Defaults to `false`.
+- `error_type`: **(Optional)** A string representing a custom error type to be used in the return type of the generated methods. The custom error type must implement `From<diesel::result::Error>`.
 
 #### Attributes for `many_to_one`
 
@@ -120,6 +122,125 @@ fn main() {
     }
 }
 ```
+
+### Async Support (with `async = true`)
+
+`DieselLinker` supports generating `async` methods for use with `diesel-async`. To enable this, simply add `async = true` to the `#[relation]` attribute.
+
+The generated methods will be `async fn` and must be called with `.await`.
+
+Here is a complete example of how to use the async functionality with `tokio` and an in-memory SQLite database.
+
+#### 1. Dependencies for Async
+
+Add the following dependencies to your `Cargo.toml` file. Note the addition of `diesel-async` and `tokio`.
+
+```toml
+[dependencies]
+diesel = { version = "2.1.0", features = ["sqlite"] }
+diesel-async = { version = "0.5.0", features = ["sqlite", "tokio", "sync-connection-wrapper"] }
+diesel_linker = "1.2.0"
+tokio = { version = "1", features = ["full"] }
+```
+
+#### 2. Async Example Code
+
+Copy and paste the following code into your `src/main.rs` and run it with `cargo run`.
+
+```rust
+use diesel::prelude::*;
+use diesel_async::{RunQueryDsl, sync_connection_wrapper::SyncConnectionWrapper};
+use diesel_linker::relation;
+use tokio;
+
+// Database schema definition.
+mod schema {
+    diesel::table! {
+        users (id) {
+            id -> Integer,
+            name -> Text,
+        }
+    }
+
+    diesel::table! {
+        posts (id) {
+            id -> Integer,
+            user_id -> Integer,
+            title -> Text,
+        }
+    }
+
+    diesel::joinable!(posts -> users (user_id));
+    diesel::allow_tables_to_appear_in_same_query!(users, posts);
+}
+
+// Model definitions.
+use schema::{users, posts};
+
+#[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
+#[diesel(table_name = users)]
+#[relation(model = "Post", relation_type = "one_to_many", backend = "sqlite", async = true)]
+pub struct User {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq)]
+#[diesel(belongs_to(User), table_name = posts)]
+#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "sqlite", async = true)]
+pub struct Post {
+    pub id: i32,
+    pub user_id: i32,
+    pub title: String,
+}
+
+#[tokio::main]
+async fn main() {
+    // 1. Establish a connection to an in-memory SQLite database.
+    // For SQLite, we use a SyncConnectionWrapper as diesel-async does not have a native async driver.
+    let mut conn = SyncConnectionWrapper::new(diesel::sqlite::SqliteConnection::establish(":memory:").unwrap());
+
+    // 2. Create the `users` and `posts` tables.
+    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).await.unwrap();
+    diesel::sql_query("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).await.unwrap();
+
+    // 3. Insert test data.
+    let new_user = User { id: 1, name: "Grace Hopper".to_string() };
+    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).await.unwrap();
+
+    let user_posts = vec![
+        Post { id: 1, user_id: 1, title: "The first compiler".to_string() },
+        Post { id: 2, user_id: 1, title: "Nanoseconds".to_string() },
+    ];
+    diesel::insert_into(posts::table).values(&user_posts).execute(&mut conn).await.unwrap();
+
+    println!("--- DieselLinker Async Demonstration ---");
+
+    // 4. Fetch the user from the database.
+    let user = users::table.find(1).first::<User>(&mut conn).await.unwrap();
+    println!("\nFound user: {}", user.name);
+
+    // 5. Use the async `get_posts()` method generated by DieselLinker.
+    println!("Fetching user's posts asynchronously...");
+    let posts = user.get_posts(&mut conn).await.unwrap();
+
+    println!("'{}' has written {} post(s):", user.name, posts.len());
+    for post in posts {
+        println!("- {}", post.title);
+
+        let author = post.get_user(&mut conn).await.unwrap();
+        assert_eq!(author.name, user.name);
+    }
+}
+```
+
+## Running the Test Suite
+
+The full test suite includes integration tests for PostgreSQL and MySQL. To run these tests, you will need to have the respective database client libraries installed and a running database instance.
+
+For detailed instructions on how to set up your development environment, please see the [Contributing Guide](CONTRIBUTING.md).
+
+If you do not have PostgreSQL and MySQL set up, `cargo test` will fail. However, the tests for SQLite (both sync and async) will run without any external database setup.
 
 ## Conclusion
 
