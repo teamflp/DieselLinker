@@ -1,4 +1,4 @@
-use diesel::{table, joinable};
+use diesel::{joinable, table};
 
 table! {
     users (id) {

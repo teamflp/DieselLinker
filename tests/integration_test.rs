@@ -1,14 +1,18 @@
 pub mod schema;
 
+use crate::schema::{post_tags, posts, tags, user_profiles, users};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel_linker::relation;
-use crate::schema::{users, posts, user_profiles, tags, post_tags};
 
 #[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
 #[diesel(table_name = users)]
 #[relation(model = "Post", relation_type = "one_to_many", backend = "sqlite")]
-#[relation(model = "UserProfile", relation_type = "one_to_one", backend = "sqlite")]
+#[relation(
+    model = "UserProfile",
+    relation_type = "one_to_one",
+    backend = "sqlite"
+)]
 pub struct User {
     pub id: i32,
     pub name: String,
@@ -24,7 +28,12 @@ pub struct UserProfile {
 
 #[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq)]
 #[diesel(belongs_to(User), table_name = posts)]
-#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "sqlite")]
+#[relation(
+    model = "User",
+    fk = "user_id",
+    relation_type = "many_to_one",
+    backend = "sqlite"
+)]
 #[relation(
     model = "Tag",
     relation_type = "many_to_many",
@@ -68,10 +77,14 @@ pub struct PostTag {
 
 fn setup_db() -> SqliteConnection {
     let mut conn = SqliteConnection::establish(":memory:").unwrap();
-    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
     diesel::sql_query("CREATE TABLE user_profiles (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, bio TEXT NOT NULL)").execute(&mut conn).unwrap();
-    diesel::sql_query("CREATE TABLE tags (tag_id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE tags (tag_id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query("CREATE TABLE post_tags (id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL, tag_id INTEGER NOT NULL)").execute(&mut conn).unwrap();
     conn
 }
@@ -80,11 +93,24 @@ fn setup_db() -> SqliteConnection {
 fn test_one_to_many_get() {
     let mut conn = setup_db();
 
-    let new_user = User { id: 1, name: "Alice".to_string() };
-    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).unwrap();
+    let new_user = User {
+        id: 1,
+        name: "Alice".to_string(),
+    };
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_post = Post { id: 1, user_id: 1, title: "First post".to_string() };
-    diesel::insert_into(posts::table).values(&new_post).execute(&mut conn).unwrap();
+    let new_post = Post {
+        id: 1,
+        user_id: 1,
+        title: "First post".to_string(),
+    };
+    diesel::insert_into(posts::table)
+        .values(&new_post)
+        .execute(&mut conn)
+        .unwrap();
 
     let user = users::table.find(1).first::<User>(&mut conn).unwrap();
     let posts = user.get_posts(&mut conn).unwrap();
@@ -100,14 +126,27 @@ fn test_one_to_many_get() {
 
 #[test]
 fn test_one_to_one_get() {
-    use crate::schema::{users, user_profiles};
+    use crate::schema::{user_profiles, users};
     let mut conn = setup_db();
 
-    let new_user = User { id: 1, name: "Alice".to_string() };
-    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).unwrap();
+    let new_user = User {
+        id: 1,
+        name: "Alice".to_string(),
+    };
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_profile = UserProfile { id: 1, user_id: 1, bio: "Alice's bio".to_string() };
-    diesel::insert_into(user_profiles::table).values(&new_profile).execute(&mut conn).unwrap();
+    let new_profile = UserProfile {
+        id: 1,
+        user_id: 1,
+        bio: "Alice's bio".to_string(),
+    };
+    diesel::insert_into(user_profiles::table)
+        .values(&new_profile)
+        .execute(&mut conn)
+        .unwrap();
 
     let user = users::table.find(1).first::<User>(&mut conn).unwrap();
     let profile = user.get_userprofile(&mut conn).unwrap();
@@ -117,20 +156,46 @@ fn test_one_to_one_get() {
 
 #[test]
 fn test_many_to_many_get() {
-    use crate::schema::{users, posts, tags, post_tags};
+    use crate::schema::{post_tags, posts, tags, users};
     let mut conn = setup_db();
 
-    let new_user = User { id: 1, name: "Alice".to_string() };
-    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).unwrap();
+    let new_user = User {
+        id: 1,
+        name: "Alice".to_string(),
+    };
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_post = Post { id: 1, user_id: 1, title: "First post".to_string() };
-    diesel::insert_into(posts::table).values(&new_post).execute(&mut conn).unwrap();
+    let new_post = Post {
+        id: 1,
+        user_id: 1,
+        title: "First post".to_string(),
+    };
+    diesel::insert_into(posts::table)
+        .values(&new_post)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_tag = Tag { tag_id: 1, name: "rust".to_string() };
-    diesel::insert_into(tags::table).values(&new_tag).execute(&mut conn).unwrap();
+    let new_tag = Tag {
+        tag_id: 1,
+        name: "rust".to_string(),
+    };
+    diesel::insert_into(tags::table)
+        .values(&new_tag)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_post_tag = PostTag { id: 1, post_id: 1, tag_id: 1 };
-    diesel::insert_into(post_tags::table).values(&new_post_tag).execute(&mut conn).unwrap();
+    let new_post_tag = PostTag {
+        id: 1,
+        post_id: 1,
+        tag_id: 1,
+    };
+    diesel::insert_into(post_tags::table)
+        .values(&new_post_tag)
+        .execute(&mut conn)
+        .unwrap();
 
     let post = posts::table.find(1).first::<Post>(&mut conn).unwrap();
     let tags = post.get_tags(&mut conn).unwrap();
@@ -149,7 +214,12 @@ use crate::schema::{authors, books, publishers};
 
 #[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
 #[diesel(table_name = authors)]
-#[relation(model = "Book", relation_type = "one_to_many", backend = "sqlite", method_name = "fetch_books")]
+#[relation(
+    model = "Book",
+    relation_type = "one_to_many",
+    backend = "sqlite",
+    method_name = "fetch_books"
+)]
 pub struct Author {
     pub id: i32,
     pub name: String,
@@ -165,7 +235,13 @@ pub struct Publisher {
 
 #[derive(Queryable, Identifiable, Insertable, Associations, Debug, PartialEq, Clone)]
 #[diesel(belongs_to(Author), belongs_to(Publisher), table_name = books)]
-#[relation(model = "Author", fk = "author_id", relation_type = "many_to_one", backend = "sqlite", method_name = "fetch_author")]
+#[relation(
+    model = "Author",
+    fk = "author_id",
+    relation_type = "many_to_one",
+    backend = "sqlite",
+    method_name = "fetch_author"
+)]
 #[relation(
     model = "Publisher",
     fk = "publisher_id",
@@ -185,8 +261,14 @@ fn setup_custom_db() -> SqliteConnection {
     let mut conn = SqliteConnection::establish(":memory:").unwrap();
     // The main setup_db() function already creates the tables we need for other tests.
     // We just need to add the new tables here.
-    diesel::sql_query("CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
-    diesel::sql_query("CREATE TABLE publishers (publisher_id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "CREATE TABLE publishers (publisher_id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+    )
+    .execute(&mut conn)
+    .unwrap();
     diesel::sql_query("CREATE TABLE books (id INTEGER PRIMARY KEY, author_id INTEGER NOT NULL, publisher_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
     conn
 }
@@ -195,14 +277,34 @@ fn setup_custom_db() -> SqliteConnection {
 fn test_custom_method_name() {
     let mut conn = setup_custom_db();
 
-    let new_publisher = Publisher { publisher_id: 1, name: "Penguin Books".to_string() };
-    diesel::insert_into(publishers::table).values(&new_publisher).execute(&mut conn).unwrap();
+    let new_publisher = Publisher {
+        publisher_id: 1,
+        name: "Penguin Books".to_string(),
+    };
+    diesel::insert_into(publishers::table)
+        .values(&new_publisher)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_author = Author { id: 1, name: "George Orwell".to_string() };
-    diesel::insert_into(authors::table).values(&new_author).execute(&mut conn).unwrap();
+    let new_author = Author {
+        id: 1,
+        name: "George Orwell".to_string(),
+    };
+    diesel::insert_into(authors::table)
+        .values(&new_author)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_book = Book { id: 1, author_id: 1, publisher_id: 1, title: "1984".to_string() };
-    diesel::insert_into(books::table).values(&new_book).execute(&mut conn).unwrap();
+    let new_book = Book {
+        id: 1,
+        author_id: 1,
+        publisher_id: 1,
+        title: "1984".to_string(),
+    };
+    diesel::insert_into(books::table)
+        .values(&new_book)
+        .execute(&mut conn)
+        .unwrap();
 
     // Test the one-to-many relation with custom name
     let author = authors::table.find(1).first::<Author>(&mut conn).unwrap();
@@ -221,17 +323,42 @@ fn test_custom_method_name() {
 fn test_many_to_one_with_custom_pk() {
     let mut conn = setup_custom_db();
 
-    let new_publisher = Publisher { publisher_id: 1, name: "Penguin Books".to_string() };
-    diesel::insert_into(publishers::table).values(&new_publisher).execute(&mut conn).unwrap();
+    let new_publisher = Publisher {
+        publisher_id: 1,
+        name: "Penguin Books".to_string(),
+    };
+    diesel::insert_into(publishers::table)
+        .values(&new_publisher)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_author = Author { id: 1, name: "George Orwell".to_string() };
-    diesel::insert_into(authors::table).values(&new_author).execute(&mut conn).unwrap();
+    let new_author = Author {
+        id: 1,
+        name: "George Orwell".to_string(),
+    };
+    diesel::insert_into(authors::table)
+        .values(&new_author)
+        .execute(&mut conn)
+        .unwrap();
 
     let books_to_insert = vec![
-        Book { id: 1, author_id: 1, publisher_id: 1, title: "1984".to_string() },
-        Book { id: 2, author_id: 1, publisher_id: 1, title: "Animal Farm".to_string() },
+        Book {
+            id: 1,
+            author_id: 1,
+            publisher_id: 1,
+            title: "1984".to_string(),
+        },
+        Book {
+            id: 2,
+            author_id: 1,
+            publisher_id: 1,
+            title: "Animal Farm".to_string(),
+        },
     ];
-    diesel::insert_into(books::table).values(&books_to_insert).execute(&mut conn).unwrap();
+    diesel::insert_into(books::table)
+        .values(&books_to_insert)
+        .execute(&mut conn)
+        .unwrap();
 
     // --- Test Eager Loading ---
     let books = books::table.load::<Book>(&mut conn).unwrap();
@@ -275,7 +402,12 @@ pub struct Paper {
 
 #[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
 #[diesel(table_name = users)]
-#[relation(model = "Paper", relation_type = "one_to_many", backend = "sqlite", error_type = "MyError")]
+#[relation(
+    model = "Paper",
+    relation_type = "one_to_many",
+    backend = "sqlite",
+    error_type = "MyError"
+)]
 pub struct Scientist {
     pub id: i32,
     pub name: String,
@@ -286,15 +418,31 @@ fn test_custom_error_type() {
     let mut conn = setup_db();
     diesel::sql_query("CREATE TABLE papers (id INTEGER PRIMARY KEY, scientist_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
 
-    let new_scientist = Scientist { id: 1, name: "Marie Curie".to_string() };
-    diesel::insert_into(users::table).values(&new_scientist).execute(&mut conn).unwrap();
+    let new_scientist = Scientist {
+        id: 1,
+        name: "Marie Curie".to_string(),
+    };
+    diesel::insert_into(users::table)
+        .values(&new_scientist)
+        .execute(&mut conn)
+        .unwrap();
 
-    let new_paper = Paper { id: 1, scientist_id: 1, title: "Recherches sur les substances radioactives".to_string() };
-    diesel::insert_into(papers::table).values(&new_paper).execute(&mut conn).unwrap();
+    let new_paper = Paper {
+        id: 1,
+        scientist_id: 1,
+        title: "Recherches sur les substances radioactives".to_string(),
+    };
+    diesel::insert_into(papers::table)
+        .values(&new_paper)
+        .execute(&mut conn)
+        .unwrap();
 
     let scientist = users::table.find(1).first::<Scientist>(&mut conn).unwrap();
     let papers = scientist.get_papers(&mut conn).unwrap();
 
     assert_eq!(papers.len(), 1);
-    assert_eq!(papers[0].title, "Recherches sur les substances radioactives");
+    assert_eq!(
+        papers[0].title,
+        "Recherches sur les substances radioactives"
+    );
 }
