@@ -1,3 +1,18 @@
 /target
 .idea/
 .vscode/
+.claude/
+
+# OS
+.DS_Store
+
+# Editor swap files
+*.swp
+*.swo
+
+# Local environment / secrets
+.env
+.env.local
+
+# mdBook build output
+book/book/

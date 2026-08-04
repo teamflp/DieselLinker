@@ -15,9 +15,11 @@
 
 ```toml
 [dependencies]
-diesel = { version = "2.2.2", features = ["postgres", "sqlite", "mysql"] } # Enable features for your database
-diesel_linker = "1.2.0" # Use the latest version
+diesel = { version = "2.2.2", features = ["sqlite"] } # Enable the feature(s) for your database
+diesel_linker = "1.3.0"
 ```
+
+> **Note:** `diesel_linker` is a proc-macro only. You do **not** need to enable its optional `mysql` / `postgres` Cargo features in your app — those exist solely to compile this repository's integration tests.
 
 ## Usage
 
@@ -34,6 +36,7 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 - `eager_loading`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates an additional static method for eager loading the relationship. Defaults to `false`.
 - `async`: **(Optional)** A boolean (`true` or `false`) that, when enabled, generates `async` methods for use with `diesel-async`. Defaults to `false`.
 - `error_type`: **(Optional)** A string representing a custom error type to be used in the return type of the generated methods. The custom error type must implement `From<diesel::result::Error>`.
+- `schema_path`: **(Optional)** The path to the module containing your `diesel::table!` definitions (e.g., `"crate::db::schema"`). Defaults to `crate::schema`. Used by `many_to_one` and `many_to_many` when the schema module is not at the crate root.
 
 #### Attributes for `many_to_one`
 
@@ -47,6 +50,7 @@ The `#[relation]` attribute generates methods on your model structs to fetch rel
 - `fk_child`: **(Required)** The foreign key in the join table that points to the related model (e.g., `"tag_id"`).
 - `primary_key`: The name of the primary key of the current model. Defaults to `"id"`.
 - `child_primary_key`: The name of the primary key of the related model. Defaults to the value of `primary_key` if specified, otherwise `"id"`.
+- `join_key_type`: **(Optional)** The Rust type of the join table's foreign key / related primary key columns (e.g., `"i64"`, `"uuid::Uuid"`). Defaults to `"i32"`. Set this if your primary keys aren't `i32`.
 
 ### Generated Methods
 
@@ -137,9 +141,9 @@ Add the following dependencies to your `Cargo.toml` file. Note the addition of `
 
 ```toml
 [dependencies]
-diesel = { version = "2.1.0", features = ["sqlite"] }
-diesel-async = { version = "0.5.0", features = ["sqlite", "tokio", "sync-connection-wrapper"] }
-diesel_linker = "1.2.0"
+diesel = { version = "2.2.2", features = ["sqlite"] }
+diesel-async = { version = "0.5.0", features = ["tokio", "sync-connection-wrapper"] }
+diesel_linker = "1.3.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -234,13 +238,29 @@ async fn main() {
 }
 ```
 
+## Known Limitations
+
+- **Composite primary/foreign keys are not supported.** Every `primary_key`, `fk`, `fk_parent`, `fk_child`, etc. attribute refers to a single column. Models with multi-column keys aren't supported by this macro.
+- **`many_to_many` keys must be uniform.** `join_key_type` sets a single Rust type for both the join table's FK columns and the related model's primary key — they must all share the same type.
+
 ## Running the Test Suite
 
-The full test suite includes integration tests for PostgreSQL and MySQL. To run these tests, you will need to have the respective database client libraries installed and a running database instance.
+SQLite tests (sync and async) run with no external database:
 
-For detailed instructions on how to set up your development environment, please see the [Contributing Guide](CONTRIBUTING.md).
+```bash
+cargo test
+```
 
-If you do not have PostgreSQL and MySQL set up, `cargo test` will fail. However, the tests for SQLite (both sync and async) will run without any external database setup.
+PostgreSQL and MySQL integration tests are gated behind optional Cargo features and need the matching client libraries plus a running database. See the [Contributing Guide](CONTRIBUTING.md) for setup details, then run:
+
+```bash
+# One backend
+cargo test --features postgres
+cargo test --features mysql
+
+# Everything (what CI runs)
+cargo test --all-features -- --test-threads=1
+```
 
 ## Conclusion
 
@@ -256,8 +276,8 @@ Add the following dependencies to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-diesel = { version = "2.1.0", features = ["sqlite"] }
-diesel_linker = "1.2.0"
+diesel = { version = "2.2.2", features = ["sqlite"] }
+diesel_linker = "1.3.0"
 ```
 
 ### 2. Example Code
