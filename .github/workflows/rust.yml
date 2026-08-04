@@ -12,6 +12,29 @@ env:
   MYSQL_URL: mysql://root:password@127.0.0.1:3306/diesel_linker_test
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev libmysqlclient-dev
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -23,6 +46,11 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       mysql:
         image: mysql:8.0
         env:
@@ -37,21 +65,33 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
+      uses: dtolnay/rust-toolchain@stable
+
+    - uses: Swatinem/rust-cache@v2
 
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libpq-dev libmysqlclient-dev
 
-    - name: Wait for MySQL to be healthy
-      run: sleep 15 # Wait for mysql to be ready. A better solution would be to use a script that polls the db.
+    # GitHub Actions already waits for the `postgres`/`mysql` service
+    # containers to report healthy (via their `--health-cmd` above) before
+    # running any step, so no extra manual wait is needed here.
 
     - name: Run tests
-      run: cargo test -- --test-threads=1
+      # Postgres/MySQL integration tests share fixed table rows against the
+      # live service databases, so test binaries must not run concurrently.
+      # `--all-features` enables the optional mysql/postgres Cargo features.
+      run: cargo test --all-features -- --test-threads=1
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
