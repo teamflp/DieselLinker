@@ -1,0 +1,12 @@
+error: `error_type` ("not valid rust") is not a valid Rust type
+ --> tests/ui/fail/06-invalid-error-type.rs:3:1
+  |
+3 | / #[relation(
+4 | |     model = "Post",
+5 | |     relation_type = "one_to_many",
+6 | |     backend = "sqlite",
+7 | |     error_type = "not valid rust"
+8 | | )]
+  | |__^
+  |
+  = note: this error originates in the attribute macro `relation` (in Nightly builds, run with -Z macro-backtrace for more info)

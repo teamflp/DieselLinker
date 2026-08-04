@@ -24,7 +24,7 @@ mod schema {
 }
 
 // In a real project, this would be in `src/models.rs`.
-use schema::{users, posts};
+use schema::{posts, users};
 
 #[derive(Queryable, Identifiable, Insertable, Debug, PartialEq)]
 #[diesel(table_name = users)]
@@ -40,7 +40,12 @@ pub struct User {
 #[diesel(belongs_to(User), table_name = posts)]
 // Defines a many-to-one relationship to the `User` model.
 // DieselLinker will generate a `get_user()` method on the `Post` struct.
-#[relation(model = "User", fk = "user_id", relation_type = "many_to_one", backend = "sqlite")]
+#[relation(
+    model = "User",
+    fk = "user_id",
+    relation_type = "many_to_one",
+    backend = "sqlite"
+)]
 pub struct Post {
     pub id: i32,
     pub user_id: i32,
@@ -52,18 +57,37 @@ fn main() {
     let mut conn = SqliteConnection::establish(":memory:").unwrap();
 
     // 2. Create the `users` and `posts` tables.
-    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").execute(&mut conn).unwrap();
+    diesel::sql_query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL)").execute(&mut conn).unwrap();
 
     // 3. Insert test data: one user and two posts.
-    let new_user = User { id: 1, name: "Ada Lovelace".to_string() };
-    diesel::insert_into(users::table).values(&new_user).execute(&mut conn).unwrap();
+    let new_user = User {
+        id: 1,
+        name: "Ada Lovelace".to_string(),
+    };
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .execute(&mut conn)
+        .unwrap();
 
     let user_posts = vec![
-        Post { id: 1, user_id: 1, title: "Notes on the Analytical Engine".to_string() },
-        Post { id: 2, user_id: 1, title: "The first computer algorithm".to_string() },
+        Post {
+            id: 1,
+            user_id: 1,
+            title: "Notes on the Analytical Engine".to_string(),
+        },
+        Post {
+            id: 2,
+            user_id: 1,
+            title: "The first computer algorithm".to_string(),
+        },
     ];
-    diesel::insert_into(posts::table).values(&user_posts).execute(&mut conn).unwrap();
+    diesel::insert_into(posts::table)
+        .values(&user_posts)
+        .execute(&mut conn)
+        .unwrap();
 
     println!("--- DieselLinker Demonstration ---");
 

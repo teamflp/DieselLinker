@@ -20,6 +20,7 @@ These attributes are common to all relationship types:
 
 -   `fk`: **(Required)** The name of the foreign key column on the current model's table (e.g., `"user_id"`).
 -   `parent_primary_key`: **(Optional)** The name of the primary key on the parent model. Defaults to `"id"`. This is only used when `eager_loading` is set to `true`.
+-   `schema_path`: **(Optional)** The path to the module containing your `diesel::table!` definitions (e.g., `"crate::db::schema"`). Defaults to `crate::schema`.
 
 ## Attributes for `many_to_many`
 
@@ -28,3 +29,10 @@ These attributes are common to all relationship types:
 -   `fk_child`: **(Required)** The foreign key in the join table that points to the related model (e.g., `"tag_id"`).
 -   `primary_key`: The name of the primary key of the current model. Defaults to `"id"`.
 -   `child_primary_key`: The name of the primary key of the related model. Defaults to the value of `primary_key` if specified, otherwise `"id"`.
+-   `schema_path`: **(Optional)** The path to the module containing your `diesel::table!` definitions (e.g., `"crate::db::schema"`). Defaults to `crate::schema`.
+-   `join_key_type`: **(Optional)** The Rust type of the join table's foreign key / related primary key columns (e.g., `"i64"`, `"uuid::Uuid"`). Defaults to `"i32"`.
+
+## Known Limitations
+
+-   **Composite primary/foreign keys are not supported.** Every key-related attribute (`primary_key`, `fk`, `fk_parent`, `fk_child`, etc.) refers to a single column.
+-   **`many_to_many` keys must be uniform.** `join_key_type` sets one Rust type for both the join table's FK columns and the related model's primary key.

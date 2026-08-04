@@ -19,11 +19,11 @@ impl<T> Attr<T> {
 pub struct ParsedAttrs {
     pub relation_type: Option<Attr<String>>,
     pub model: Option<Attr<String>>,
-    pub fk: Option<Attr<String>>,         // Foreign key for the relation. Required for `many_to_one`.
+    pub fk: Option<Attr<String>>, // Foreign key for the relation. Required for `many_to_one`.
     pub parent_primary_key: Option<Attr<String>>, // Primary key of the parent model for `many_to_one` eager loading.
-    pub join_table: Option<Attr<String>>, // Join table for `many_to_many` relations.
-    pub fk_parent: Option<Attr<String>>,  // Foreign key in the join table pointing to the parent model.
-    pub fk_child: Option<Attr<String>>,   // Foreign key in the join table pointing to the child model.
+    pub join_table: Option<Attr<String>>,         // Join table for `many_to_many` relations.
+    pub fk_parent: Option<Attr<String>>, // Foreign key in the join table pointing to the parent model.
+    pub fk_child: Option<Attr<String>>, // Foreign key in the join table pointing to the child model.
     pub method_name: Option<Attr<String>>,
     pub backend: Option<Attr<String>>,
     pub primary_key: Option<Attr<String>>,
@@ -31,6 +31,8 @@ pub struct ParsedAttrs {
     pub eager_loading: Option<Attr<bool>>,
     pub async_: Option<Attr<bool>>,
     pub error_type: Option<Attr<String>>,
+    pub schema_path: Option<Attr<String>>, // Path to the `diesel::table!` module. Defaults to `crate::schema`.
+    pub join_key_type: Option<Attr<String>>, // Rust type of the join-table FK/PK columns for `many_to_many`. Defaults to `i32`.
 }
 
 // Parses the attributes passed to the `relation` macro.
@@ -116,10 +118,20 @@ pub fn parse_attributes(attrs: Vec<Meta>) -> Result<ParsedAttrs> {
                         parsed_attrs.error_type = Some(Attr::new(s.value(), span));
                     }
                 }
+                "schema_path" => {
+                    if let Lit::Str(s) = &nv.lit {
+                        parsed_attrs.schema_path = Some(Attr::new(s.value(), span));
+                    }
+                }
+                "join_key_type" => {
+                    if let Lit::Str(s) = &nv.lit {
+                        parsed_attrs.join_key_type = Some(Attr::new(s.value(), span));
+                    }
+                }
                 _ => {
                     return Err(Error::new(
                         nv.path.span(),
-                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`, `async`, `error_type`",
+                        "Unknown attribute, expected one of: `relation_type`, `model`, `fk`, `parent_primary_key`, `join_table`, `fk_parent`, `fk_child`, `method_name`, `backend`, `primary_key`, `child_primary_key`, `eager_loading`, `async`, `error_type`, `schema_path`, `join_key_type`",
                     ))
                 }
             }
@@ -163,6 +175,9 @@ pub fn parse_attributes(attrs: Vec<Meta>) -> Result<ParsedAttrs> {
             if let Some(attr) = &parsed_attrs.join_table {
                 return Err(Error::new(attr.span, "`join_table` is only used for `many_to_many` relations."));
             }
+            if let Some(attr) = &parsed_attrs.join_key_type {
+                return Err(Error::new(attr.span, "`join_key_type` is only used for `many_to_many` relations."));
+            }
         }
         "many_to_one" => {
             if parsed_attrs.model.is_none() {
@@ -174,8 +189,11 @@ pub fn parse_attributes(attrs: Vec<Meta>) -> Result<ParsedAttrs> {
             if let Some(attr) = &parsed_attrs.join_table {
                 return Err(Error::new(attr.span, "`join_table` is only used for `many_to_many` relations."));
             }
+            if let Some(attr) = &parsed_attrs.join_key_type {
+                return Err(Error::new(attr.span, "`join_key_type` is only used for `many_to_many` relations."));
+            }
             if let Some(attr) = &parsed_attrs.parent_primary_key {
-                if !parsed_attrs.eager_loading.as_ref().map_or(false, |a| a.value) {
+                if !parsed_attrs.eager_loading.as_ref().is_some_and(|a| a.value) {
                     return Err(Error::new(attr.span, "`parent_primary_key` is only used for eager loading."));
                 }
             }
@@ -252,6 +270,21 @@ mod tests {
     }
 
     #[test]
+    fn test_join_key_type_is_accepted_for_many_to_many() {
+        let attrs = vec![
+            parse_quote! { relation_type = "many_to_many" },
+            parse_quote! { model = "Tag" },
+            parse_quote! { join_table = "post_tags" },
+            parse_quote! { fk_parent = "post_id" },
+            parse_quote! { fk_child = "tag_id" },
+            parse_quote! { backend = "sqlite" },
+            parse_quote! { join_key_type = "i64" },
+        ];
+        let parsed = parse_attributes(attrs).expect("join_key_type should be a known attribute");
+        assert_eq!(parsed.join_key_type.unwrap().value, "i64");
+    }
+
+    #[test]
     fn test_valid_one_to_one() {
         let attrs = vec![
             parse_quote! { relation_type = "one_to_one" },
@@ -290,7 +323,10 @@ mod tests {
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "`join_table` is only used for `many_to_many` relations.");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "`join_table` is only used for `many_to_many` relations."
+        );
     }
 
     #[test]
@@ -303,6 +339,9 @@ mod tests {
         ];
         let result = parse_attributes(attrs);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "The `fk` attribute (foreign key) is required for a `many_to_one` relationship.");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "The `fk` attribute (foreign key) is required for a `many_to_one` relationship."
+        );
     }
 }
